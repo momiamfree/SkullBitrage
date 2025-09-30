@@ -139,9 +139,12 @@
       };
 
       return (
-        <div className="container-fluid bg-dark text-light min-vh-100 py-4">
+        <div className="container-fluid bg-dark text-light min-vh-100 py-5">
           <div className="text-center mb-4">
-            <span style={{fontSize:"1rem",color:"#fff"}}>Support me to be blessed 🙏🏼: <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b></span>
+            <span style={{fontSize:"1rem",color:"#fff"}}>
+              Support me to be blessed 🙏🏼: 
+              <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b>
+            </span>
           </div>
           <div className="d-flex header-row mb-3 justify-content-between">
             <div className="header-left">
@@ -154,7 +157,6 @@
                 </h1>
               </div>
             </div>
-
             <div className="header-right">
               {/* filters on the right as requested */}
               <div className="d-flex controls-row align-items-center">
@@ -197,7 +199,12 @@
               </div>
             </div>
           </div>
-
+          {/* 🔹 Nueva fila con fecha de actualización */}
+          <div className="text-left mb-4 mt-5">
+            <small style={{color:"#aaa"}}>
+              Last update: {lastUpdated || "-"}
+            </small>
+          </div>
           {/* Table */}
           <div className="table-responsive">
             <table className="table table-dark table-striped mb-0 text-sm text-center align-middle w-100">
@@ -210,7 +217,13 @@
                         ? <i className="bi bi-arrow-up-short me-1"></i> 
                         : <i className="bi bi-arrow-down-short me-1"></i>
                     )}
-                    APR %
+                    APR % &nbsp;
+                    <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="APR is calculated from the funding rate difference between exchanges. 
+              Example: (FundingSell - FundingBuy) × 8760 (hours/year). 
+              This approximates the yearly return of a delta-neutral position."></i>
                   </th>
                   <th>Token</th>
                   <th>Long / Short</th>
@@ -220,16 +233,18 @@
                         ? <i className="bi bi-arrow-up-short me-1"></i> 
                         : <i className="bi bi-arrow-down-short me-1"></i>
                     )}
-                    Price Spread &nbsp;
+                    Price Spread &nbsp; 
                     <i className="bi bi-info-circle" 
                       data-bs-toggle="tooltip" 
                       data-bs-html="true"
-                      title="The price spread is calculated using the taker prices: the ASK from the exchange where you are buying and the BID from the exchange where you are selling. This represents the actual executable spread for a market order."></i>
+                      title="The price spread is calculated using the taker prices: the ASK from the exchange where you buy and the BID from the exchange where you sell. 
+              This shows the real executable market spread."></i>
                   </th>
                   <th>Open Interest</th>
                   <th>24h Volume</th>
                 </tr>
               </thead>
+
               <tbody>
                 {paginatedOpps.map((opp, i) => {
                   const buyEx = exchMap[opp.buyExchange];
