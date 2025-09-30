@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SkullBitrage</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="icon" type="image/png" href="SKULLKID.png" />
+  <link rel="stylesheet" type="text/css" href="index.html">
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-dark text-light">
+  <div id="root"></div>
+  <!-- Wallet Modal (triggered desde React buttons) -->
+  <div class="modal fade" id="walletModal" tabindex="-1" aria-labelledby="walletModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+      <div class="modal-content bg-dark text-light">
+        <div class="modal-header">
+          <h5 class="modal-title" id="walletModalLabel">My wallet</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small mb-1">Address (copy to clipboard):</p>
+          <div class="input-group">
+            <input id="walletAddress" class="form-control bg-secondary text-light" value="0xYOUR_WALLET_ADDRESS" readonly />
+            <button class="btn btn-outline-light" id="copyWalletBtn" type="button">Copy</button>
+          </div>
+          <p class="mt-2 small text-muted">Support tips / donations via this address.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="text/babel">
+    //const BASE_URL = "http://localhost:4000/api/opportunity";
+    const BASE_URL = "/api/opportunity";
+
+    const EXCHANGES = [
+      { id: 1, name: "hyperliquid", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/hl_logo.svg", makerFee: 0.00015, takerFee: 0.0004 },
+      //{ id: 2, name: "extended", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/ex_logo.svg", makerFee: 0, takerFee: 0.00025 },
+      //{ id: 3, name: "backpack", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/bp_logo.svg", makerFee: 0.0002, takerFee: 0.0005 },
+      { id: 4, name: "aster", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg", makerFee: 0.0001, takerFee: 0.00035 },
+      //{ id: 5, name: "paradex", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/px_logo.svg", makerFee: 0, takerFee: 0 },
+      { id: 6, name: "lighter", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/lt_logo.svg", makerFee: 0, takerFee: 0 },
+      //{ id: 7, name: "pacifica", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg", makerFee: 0.00015, takerFee: 0.0004 }
+    ];
+
+    function formatNumber(n) {
+      if (n == null) return "-";
+      if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2)+"B";
+      if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2)+"M";
+      if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2)+"K";
+      return Number(n).toLocaleString();
+    }
+
+  function YieldGapArbUI() {
+    const [opps, setOpps] = React.useState([]);
+    const [lastUpdated, setLastUpdated] = React.useState(null);
+    const [searchToken, setSearchToken] = React.useState("");
+    const [filterExchange, setFilterExchange] = React.useState("");
+    const [sortConfig, setSortConfig] = React.useState({ key: "apr", direction: "desc" });
+    const [page, setPage] = React.useState(1);
+    const pageSize = 20;
+
+    const exchMap = React.useMemo(() => {
+      const m = {};
+      EXCHANGES.forEach(e => m[e.id] = e);
+      return m;
+    }, []);
+
+    // 🔹 Estado inicial con todos los IDs
+    const [selectedExchanges, setSelectedExchanges] = React.useState(EXCHANGES.map(ex => ex.id));
+
+    const fetchOpp = async () => {
+      try {
+        const query = selectedExchanges.length ? `?exchanges=${selectedExchanges.join(",")}` : "";
+        const resp = await fetch(BASE_URL + query);
+        const json = await resp.json();
+        setOpps(Array.isArray(json.opportunities) ? json.opportunities : []);
+        setLastUpdated(json.lastUpdate ? new Date(json.lastUpdate).toLocaleTimeString() : "-");
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    React.useEffect(() => { fetchOpp(); }, [selectedExchanges]);
+    React.useEffect(() => { const i = setInterval(fetchOpp, 10000); return () => clearInterval(i); }, [selectedExchanges]);
+
+      const sortedFilteredOpps = React.useMemo(() => {
+        let data = [...opps];
+
+        if (searchToken) {
+          data = data.filter(o => o.token.toLowerCase().includes(searchToken.toLowerCase()));
+          setPage(1);
+        }
+
+        if (filterExchange) {
+          data = data.filter(o =>
+            exchMap[o.buyExchange]?.name === filterExchange ||
+            exchMap[o.sellExchange]?.name === filterExchange
+          );
+          setPage(1);
+        }
+
+        if (sortConfig.key) {
+          data.sort((a, b) => {
+            let valA, valB;
+            if (sortConfig.key === "apr") {
+              valA = (a.avgFundingSell - a.avgFundingBuy) * 8760 * 100;
+              valB = (b.avgFundingSell - b.avgFundingBuy) * 8760 * 100;
+            } else if (sortConfig.key === "spread") {
+              valA = a.buyAsk && a.sellBid ? ((a.sellBid - a.buyAsk) / a.buyAsk) * 100 : 0;
+              valB = b.buyAsk && b.sellBid ? ((b.sellBid - b.buyAsk) / b.buyAsk) * 100 : 0;
+            } else {
+              valA = a[sortConfig.key];
+              valB = b[sortConfig.key];
+            }
+            if (valA < valB) return sortConfig.direction === "asc" ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === "asc" ? 1 : -1;
+            return 0;
+          });
+        }
+
+        return data;
+      }, [opps, searchToken, filterExchange, sortConfig]);
+
+      const paginatedOpps = sortedFilteredOpps.slice((page-1)*pageSize, page*pageSize);
+      const totalPages = Math.max(1, Math.ceil(sortedFilteredOpps.length / pageSize));
+
+      const handleSort = (key) => {
+        setSortConfig(prev => {
+          if (prev.key === key) {
+            return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+          }
+          return { key, direction: "asc" };
+        });
+      };
+
+      return (
+        <div className="container-fluid bg-dark text-light min-vh-100 py-4">
+          <div className="text-center mb-4">
+            <span style={{fontSize:"1rem",color:"#fff"}}>Support me to be blessed 🙏🏼: <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b></span>
+          </div>
+          <div className="d-flex header-row mb-3 justify-content-between">
+            <div className="header-left">
+              <div className="logo-circle me-2">
+                <img src="SKULLKID.png" alt="Logo" />
+              </div>
+              <div>
+                <h1 className="h1 mb-0">
+                  SkullBitrage <span style={{fontSize:"0.8rem",color:"#ccc"}}>by <a href="https://twitter.com/momiamfree" target="_blank" rel="noopener noreferrer" style={{color:"#ccc",textDecoration:"none"}}>@momiamfree</a></span>
+                </h1>
+              </div>
+            </div>
+
+            <div className="header-right">
+              {/* filters on the right as requested */}
+              <div className="d-flex controls-row align-items-center">
+                <input
+                  type="text"
+                  className="form-control bg-dark text-light me-2"
+                  placeholder="Search token..."
+                  value={searchToken}
+                  onChange={e => setSearchToken(e.target.value)}
+                  style={{minWidth: "180px"}}
+                />
+                  <div className="dropdown">
+                    <button className="btn btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">
+                      Exchanges
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end bg-dark text-light p-2">
+                      {EXCHANGES.map(ex => (
+                        <li key={ex.id}>
+                          <div className="form-check">
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              id={ex.name}
+                              checked={selectedExchanges.includes(ex.id)}
+                              onChange={e => {
+                                if (e.target.checked) {
+                                  setSelectedExchanges(prev => [...prev, ex.id]);
+                                } else {
+                                  setSelectedExchanges(prev => prev.filter(v => v !== ex.id));
+                                }
+                              }}
+                            />
+                            <label className="form-check-label" htmlFor={ex.name}><img src={ex.logoURL} alt={ex.name} style={{width:"18px",height:"18px",objectFit:"contain"}} className="me-2"/>{ex.name}</label>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="table-responsive">
+            <table className="table table-dark table-striped mb-0 text-sm text-center align-middle w-100">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th onClick={() => handleSort("apr")} style={{cursor:"pointer"}}>
+                    {sortConfig.key==="apr" && (
+                      sortConfig.direction==="asc" 
+                        ? <i className="bi bi-arrow-up-short me-1"></i> 
+                        : <i className="bi bi-arrow-down-short me-1"></i>
+                    )}
+                    APR %
+                  </th>
+                  <th>Token</th>
+                  <th>Long / Short</th>
+                  <th onClick={() => handleSort("spread")} style={{cursor:"pointer"}}>
+                    {sortConfig.key==="spread" && (
+                      sortConfig.direction==="asc" 
+                        ? <i className="bi bi-arrow-up-short me-1"></i> 
+                        : <i className="bi bi-arrow-down-short me-1"></i>
+                    )}
+                    Price Spread &nbsp;
+                    <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="The price spread is calculated using the taker prices: the ASK from the exchange where you are buying and the BID from the exchange where you are selling. This represents the actual executable spread for a market order."></i>
+                  </th>
+                  <th>Open Interest</th>
+                  <th>24h Volume</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedOpps.map((opp, i) => {
+                  const buyEx = exchMap[opp.buyExchange];
+                  const sellEx = exchMap[opp.sellExchange];
+                  const apr = opp.apr;
+                  const priceSpreadPct = opp.spread * 100;
+                  return (
+                    <tr key={i}>
+                      <td>#{(page-1)*pageSize + i + 1}</td>
+                      <td className={apr>0 ? "text-success fw-bold" : apr<0 ? "text-danger fw-bold" : "text-muted"}>
+                        {apr ? Math.round(apr) + " %" : "-"}
+                      </td>
+                      <td className="fw-semibold">{opp.token}</td>
+                      <td>
+                        <div className="d-flex align-items-center justify-content-center gap-2">
+                          {buyEx?.logoURL && <img src={buyEx.logoURL} alt={buyEx.name} style={{width:"20px",height:"20px"}} />}
+                          <span>/</span>
+                          {sellEx?.logoURL && <img src={sellEx.logoURL} alt={sellEx.name} style={{width:"20px",height:"20px"}} />}
+                        </div>
+                      </td>
+                      <td className={priceSpreadPct>0 ? "text-success fw-bold" : priceSpreadPct<0 ? "text-danger fw-bold" : "text-muted"}>
+                        {priceSpreadPct!==null ? priceSpreadPct.toFixed(2) : "-"} %
+                      </td>
+                      <td>{formatNumber(opp.buyOI)} / {formatNumber(opp.sellOI)}</td>
+                      <td>{formatNumber(opp.buyVolume)} / {formatNumber(opp.sellVolume)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="d-flex justify-content-between align-items-center mt-3">
+            <button
+              className="btn btn-outline-light btn-sm"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p-1))}
+            >
+              <i className="bi bi-arrow-left"></i> Previous
+            </button>
+            <span>Page {page} of {Math.max(1, Math.ceil(sortedFilteredOpps.length / pageSize))}</span>
+            <button
+              className="btn btn-outline-light btn-sm"
+              disabled={page >= Math.ceil(sortedFilteredOpps.length / pageSize)}
+              onClick={() => setPage(p => Math.min(Math.ceil(sortedFilteredOpps.length / pageSize), p+1))}
+            >
+              Next <i className="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<YieldGapArbUI />);
+
+    // After React renders, enable Bootstrap tooltips & copy button behavior
+    document.addEventListener("DOMContentLoaded", function() {
+      // enable tooltips
+      const tooltipElList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipElList.forEach(function (tooltipEl) {
+        new bootstrap.Tooltip(tooltipEl);
+      });
+
+      // copy wallet button
+      const copyBtn = document.getElementById("copyWalletBtn");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          const inp = document.getElementById("walletAddress");
+          if (!inp) return;
+          inp.select();
+          inp.setSelectionRange(0, 99999);
+          navigator.clipboard?.writeText(inp.value).then(() => {
+            copyBtn.innerText = "Copied";
+            setTimeout(()=> copyBtn.innerText = "Copy", 1200);
+          }).catch(()=> alert("Copy failed"));
+        });
+      }
+    });
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
