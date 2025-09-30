@@ -23,7 +23,6 @@ export default class Lighter {
       const details = detailsRes?.order_book_details ?? [];
       const market = details.find(d => d.symbol === token);
 
-      if (!market) throw new Error(`No se encontró mercado para ${token}`);
       const marketId = market.market_id;
       const lastPrice = parseFloat(market.last_trade_price ?? 0);
       const openInterestToken = parseFloat(market.open_interest ?? 0);
@@ -46,7 +45,7 @@ export default class Lighter {
         );
         fundingRate = parseFloat(latest.rate ?? 0);
       }
-
+      console.log("Lighter funding rate token " + token + ' -> ' + fundingRate  )
       // 3️⃣ Obtener mejor bid/ask real de orderBookOrders
       const orderRes = await safeFetch(
         `${this.baseUrl}/orderBookOrders?market_id=${marketId}&limit=1`
@@ -70,7 +69,7 @@ export default class Lighter {
         midPrice: bestBid && bestAsk ? (bestBid + bestAsk) / 2 : lastPrice,
       };
     } catch (err) {
-      console.error("❌ Error en Lighter.getTokenData:", err.message);
+
       throw err;
     }
   }

@@ -25,7 +25,6 @@ export default class Hyperliquid {
       const universe = res?.[0]?.universe ?? [];
       return universe.map(a => a.name); // ej: ["BTC","ETH","SOL",...]
     } catch (err) {
-      console.error("❌ Error en Hyperliquid.getAvailableTokens:", err.message);
       return [];
     }
   }
@@ -59,7 +58,6 @@ export default class Hyperliquid {
       const marketData = metaRes?.[1] ?? [];
 
       const idx = universe.findIndex((a) => a.name === token);
-      if (idx === -1) throw new Error(`No se encontró ${token} en Hyperliquid`);
 
       const info = universe[idx];
       const market = marketData[idx];

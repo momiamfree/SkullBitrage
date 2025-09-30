@@ -44,17 +44,18 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
     console.error("⚠️ Error leyendo snapshot:", err.message);
   }
 }
-
 // Construcción de oportunidades
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
+
+  // --- Dirección 1: ex1 -> ex2 ---
   const apr1 = (ex2.fundingRate - ex1.fundingRate) * 8760;
   const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
 
+  // Caso 1: funding de distinto signo -> siempre oportunidad (aunque spread sea negativo)
   if (
     ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
       (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
-    (spread1 > 0 || ex2.fundingRate > ex1.fundingRate) &&
     apr1 > 1
   ) {
     opportunities.push({
@@ -77,14 +78,36 @@ function buildOpportunities(token, ex1, ex2) {
       spread: spread1,
     });
   }
+  // Caso 2: funding mismo signo pero spread positivo
+  else if (spread1 > 0) {
+    opportunities.push({
+      token,
+      buyExchange: exchangeMap[ex1.exchange],
+      sellExchange: exchangeMap[ex2.exchange],
+      avgFundingBuy: ex1.fundingRate,
+      avgFundingSell: ex2.fundingRate,
+      apr: "NEGATIVE", // marcador especial
+      buyOI: ex1.openInterest,
+      sellOI: ex2.openInterest,
+      buyVolume: ex1.volume,
+      sellVolume: ex2.volume,
+      buyBid: ex1.bid,
+      buyAsk: ex1.ask,
+      buyMidPrice: ex1.midPrice,
+      sellBid: ex2.bid,
+      sellAsk: ex2.ask,
+      sellMidPrice: ex2.midPrice,
+      spread: spread1,
+    });
+  }
 
+  // --- Dirección 2: ex2 -> ex1 ---
   const apr2 = (ex1.fundingRate - ex2.fundingRate) * 8760;
   const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
 
   if (
     ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
       (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
-    (spread2 > 0 || ex1.fundingRate > ex2.fundingRate) &&
     apr2 > 1
   ) {
     opportunities.push({
@@ -94,6 +117,26 @@ function buildOpportunities(token, ex1, ex2) {
       avgFundingBuy: ex2.fundingRate,
       avgFundingSell: ex1.fundingRate,
       apr: apr2,
+      buyOI: ex2.openInterest,
+      sellOI: ex1.openInterest,
+      buyVolume: ex2.volume,
+      sellVolume: ex1.volume,
+      buyBid: ex2.bid,
+      buyAsk: ex2.ask,
+      buyMidPrice: ex2.midPrice,
+      sellBid: ex1.bid,
+      sellAsk: ex1.ask,
+      sellMidPrice: ex1.midPrice,
+      spread: spread2,
+    });
+  } else if (spread2 > 0) {
+    opportunities.push({
+      token,
+      buyExchange: exchangeMap[ex2.exchange],
+      sellExchange: exchangeMap[ex1.exchange],
+      avgFundingBuy: ex2.fundingRate,
+      avgFundingSell: ex1.fundingRate,
+      apr: "NEGATIVE",
       buyOI: ex2.openInterest,
       sellOI: ex1.openInterest,
       buyVolume: ex2.volume,
@@ -118,6 +161,7 @@ async function updateCache() {
     let opportunities = [];
 
     for (const token of allTokens) {
+      console.log("🌀 Procesando " + token);
       const results = await Promise.allSettled([
         aster.getTokenData(token, "USDT"),
         lighter.getTokenData(token),
