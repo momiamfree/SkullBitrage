@@ -26,7 +26,7 @@ const tokensHyper = await hyperliquid.getAvailableTokens();
 
 
 const allTokens = [...new Set([...tokensAster, /*...tokensLighter, */...tokensHyper])];
-//const allTokens = ["ETH", "BTC", "SOL", "BNB", "PUMP", "ASTER", "HYPE", "YZY"]
+//const allTokens = ["ADA", "BTC", "SOL", "BNB", "PUMP", "ASTER", "HYPE", "YZY"]
 
 // Mapeo exchanges a IDs (los mismos que el frontend usa)
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1 };
@@ -50,19 +50,19 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
 // Construcción de oportunidades
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
-
+    const apr1 = ((ex2.fundingRate - ex1.fundingRate) * 8760);
     const spread1 = ex1.ask && ex2.bid
     ? ((ex2.bid - ex1.ask) / ex1.ask)
     : null;
 
-  if ((spread1 > 0 || ex2.fundingRate > ex1.fundingRate)) {
+  if ((spread1 > 0 || ex2.fundingRate > ex1.fundingRate) && apr1 > 1) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
       sellExchange: exchangeMap[ex2.exchange],
       avgFundingBuy: ex1.fundingRate,
       avgFundingSell: ex2.fundingRate,
-      apr: ((ex2.fundingRate - ex1.fundingRate) * 8760),
+      apr: apr1,
       buyOI: ex1.openInterest,
       sellOI: ex2.openInterest,
       buyVolume: ex1.volume,
@@ -76,19 +76,19 @@ function buildOpportunities(token, ex1, ex2) {
       spread: spread1,
     });
   }
-
+    const apr2 = ((ex1.fundingRate - ex2.fundingRate) * 8760);
     const spread2 = ex2.ask && ex1.bid
     ? ((ex1.bid - ex2.ask) / ex2.ask)
     : null;
 
-  if ((spread2 > 0 || ex1.fundingRate > ex2.fundingRate)) {
+  if ((spread2 > 0 || ex1.fundingRate > ex2.fundingRate) && apr2 > 1) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex2.exchange],
       sellExchange: exchangeMap[ex1.exchange],
       avgFundingBuy: ex2.fundingRate,
       avgFundingSell: ex1.fundingRate,
-      apr: ((ex1.fundingRate - ex2.fundingRate) * 8760),
+      apr: apr2,
       buyOI: ex2.openInterest,
       sellOI: ex1.openInterest,
       buyVolume: ex2.volume,
