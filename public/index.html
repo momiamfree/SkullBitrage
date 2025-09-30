@@ -269,7 +269,7 @@
                           {sellEx?.logoURL && <img src={sellEx.logoURL} alt={sellEx.name} style={{width:"20px",height:"20px"}} />}
                         </div>
                       </td>
-                      <td className={priceSpreadPct>0 ? "text-success fw-bold" : priceSpreadPct<0 ? "text-danger fw-bold" : "text-muted"}>
+                      <td className={priceSpreadPct>0 ? "text-success fw-bold" : priceSpreadPct<0 ? "text-danger fw-bold" : "text-danger fw-bold"}>
                         {priceSpreadPct!==null ? priceSpreadPct.toFixed(2) : "-"} %
                       </td>
                       <td>{formatNumber(opp.buyOI)} / {formatNumber(opp.sellOI)}</td>

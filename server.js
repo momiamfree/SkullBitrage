@@ -24,9 +24,7 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 //const tokensLighter = await lighter.getAvailableTokens();
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
-
 const allTokens = [...new Set([...tokensAster, /*...tokensLighter, */...tokensHyper])];
-//const allTokens = ["ADA", "BTC", "SOL", "BNB", "PUMP", "ASTER", "HYPE", "YZY"]
 
 // Mapeo exchanges a IDs (los mismos que el frontend usa)
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1 };
@@ -50,16 +48,15 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
 // Construcción de oportunidades
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
-    const apr1 = ((ex2.fundingRate - ex1.fundingRate) * 8760);
-    const spread1 = ex1.ask && ex2.bid
-    ? ((ex2.bid - ex1.ask) / ex1.ask)
-    : null;
+  const apr1 = (ex2.fundingRate - ex1.fundingRate) * 8760;
+  const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
 
-if (
-  ((ex1.fundingRate > 0 && ex2.fundingRate < 0) || (ex1.fundingRate < 0 && ex2.fundingRate > 0)) && 
-  (spread1 > 0 || ex2.fundingRate > ex1.fundingRate) && 
-  apr1 > 1
-) {
+  if (
+    ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
+      (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
+    (spread1 > 0 || ex2.fundingRate > ex1.fundingRate) &&
+    apr1 > 1
+  ) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
@@ -80,16 +77,16 @@ if (
       spread: spread1,
     });
   }
-    const apr2 = ((ex1.fundingRate - ex2.fundingRate) * 8760);
-    const spread2 = ex2.ask && ex1.bid
-    ? ((ex1.bid - ex2.ask) / ex2.ask)
-    : null;
 
-if (
-  ((ex1.fundingRate > 0 && ex2.fundingRate < 0) || (ex1.fundingRate < 0 && ex2.fundingRate > 0)) && 
-  (spread2 > 0 || ex1.fundingRate > ex2.fundingRate) && 
-  apr2 > 1
-) {
+  const apr2 = (ex1.fundingRate - ex2.fundingRate) * 8760;
+  const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
+
+  if (
+    ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
+      (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
+    (spread2 > 0 || ex1.fundingRate > ex2.fundingRate) &&
+    apr2 > 1
+  ) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex2.exchange],
@@ -114,10 +111,10 @@ if (
   return opportunities;
 }
 
-// Actualizador
+// Actualizador grande (todos los tokens)
 async function updateCache() {
   try {
-    console.log("♻️ Actualizando oportunidades...");
+    console.log("♻️ Actualizando oportunidades (ciclo grande)...");
     let opportunities = [];
 
     for (const token of allTokens) {
@@ -127,7 +124,9 @@ async function updateCache() {
         hyperliquid.getTokenData(token),
       ]);
 
-      const available = results.filter(r => r.status === "fulfilled").map(r => r.value);
+      const available = results
+        .filter((r) => r.status === "fulfilled")
+        .map((r) => r.value);
 
       for (let i = 0; i < available.length; i++) {
         for (let j = i + 1; j < available.length; j++) {
@@ -137,7 +136,7 @@ async function updateCache() {
     }
 
     const seen = new Set();
-    opportunities = opportunities.filter(opp => {
+    opportunities = opportunities.filter((opp) => {
       const key = `${opp.token}-${opp.buyExchange}-${opp.sellExchange}`;
       const inverseKey = `${opp.token}-${opp.sellExchange}-${opp.buyExchange}`;
       if (opp.apr <= 0 && opp.spread <= 0) return false;
@@ -157,13 +156,55 @@ async function updateCache() {
     );
 
     console.log(`✅ Cache actualizada con ${cachedOpportunities.length} oportunidades`);
-    updateCache()
+
+    // Reprogramar el ciclo grande
+    setTimeout(updateCache, 60 * 1000); // cada 60s
   } catch (err) {
     console.error("❌ Error actualizando cache:", err);
+    setTimeout(updateCache, 60 * 1000); // reintentar en 60s
   }
 }
 
-updateCache();
+// Mini-actualización (solo tokens ya detectados)
+async function miniUpdate() {
+  try {
+    if (!cachedOpportunities.length) return;
+
+    const activeTokens = [...new Set(cachedOpportunities.map((o) => o.token))];
+    let updatedOpps = [];
+
+    for (const token of activeTokens) {
+      const results = await Promise.allSettled([
+        aster.getTokenData(token, "USDT"),
+        lighter.getTokenData(token),
+        hyperliquid.getTokenData(token),
+      ]);
+
+      const available = results
+        .filter((r) => r.status === "fulfilled")
+        .map((r) => r.value);
+
+      for (let i = 0; i < available.length; i++) {
+        for (let j = i + 1; j < available.length; j++) {
+          updatedOpps.push(...buildOpportunities(token, available[i], available[j]));
+        }
+      }
+    }
+
+    // Sustituimos oportunidades antiguas de esos tokens por las nuevas
+    cachedOpportunities = cachedOpportunities.filter(
+      (o) => !activeTokens.includes(o.token)
+    ).concat(updatedOpps);
+
+    console.log(`⚡ Mini update: ${updatedOpps.length} oportunidades refrescadas`);
+  } catch (err) {
+    console.error("❌ Error en miniUpdate:", err);
+  }
+}
+
+// Lanzamos ambos ciclos
+updateCache(); // grande
+setInterval(miniUpdate, 10 * 1000); // mini cada 10s
 
 // Endpoint: filtra desde la cache según exchanges seleccionados
 app.get("/api/opportunity", (req, res) => {
@@ -171,19 +212,20 @@ app.get("/api/opportunity", (req, res) => {
   let opportunities = cachedOpportunities;
 
   if (typeof exchanges !== "undefined") {
-    // si viene '?exchanges=' vacío queremos interpretar como "ninguno seleccionado"
-    const selected = exchanges === "" 
-      ? [] 
-      : exchanges.split(",").map(id => parseInt(id.trim(), 10)).filter(n => !isNaN(n));
+    const selected =
+      exchanges === ""
+        ? []
+        : exchanges
+            .split(",")
+            .map((id) => parseInt(id.trim(), 10))
+            .filter((n) => !isNaN(n));
 
-    // si no hay ninguno seleccionado devolvemos lista vacía (comportamiento esperado)
     if (selected.length === 0) {
       return res.json({ lastUpdate, opportunities: [] });
     }
 
-    // REQUERIMOS que BOTH exchanges (buy y sell) estén dentro de 'selected'
     opportunities = opportunities.filter(
-      opp => selected.includes(opp.buyExchange) && selected.includes(opp.sellExchange)
+      (opp) => selected.includes(opp.buyExchange) && selected.includes(opp.sellExchange)
     );
   }
 
