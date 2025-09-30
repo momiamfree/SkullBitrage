@@ -196,11 +196,15 @@ async function miniUpdate() {
       (o) => !activeTokens.includes(o.token)
     ).concat(updatedOpps);
 
+    // 🔹 Actualizamos timestamp
+    lastUpdate = new Date().toISOString();
+
     console.log(`⚡ Mini update: ${updatedOpps.length} oportunidades refrescadas`);
   } catch (err) {
     console.error("❌ Error en miniUpdate:", err);
   }
 }
+
 
 // Lanzamos ambos ciclos
 updateCache(); // grande
