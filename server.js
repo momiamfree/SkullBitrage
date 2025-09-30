@@ -55,7 +55,11 @@ function buildOpportunities(token, ex1, ex2) {
     ? ((ex2.bid - ex1.ask) / ex1.ask)
     : null;
 
-  if ((spread1 > 0 || ex2.fundingRate > ex1.fundingRate) && apr1 > 1) {
+if (
+  ((ex1.fundingRate > 0 && ex2.fundingRate < 0) || (ex1.fundingRate < 0 && ex2.fundingRate > 0)) && 
+  (spread1 > 0 || ex2.fundingRate > ex1.fundingRate) && 
+  apr1 > 1
+) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
@@ -81,7 +85,11 @@ function buildOpportunities(token, ex1, ex2) {
     ? ((ex1.bid - ex2.ask) / ex2.ask)
     : null;
 
-  if ((spread2 > 0 || ex1.fundingRate > ex2.fundingRate) && apr2 > 1) {
+if (
+  ((ex1.fundingRate > 0 && ex2.fundingRate < 0) || (ex1.fundingRate < 0 && ex2.fundingRate > 0)) && 
+  (spread2 > 0 || ex1.fundingRate > ex2.fundingRate) && 
+  apr2 > 1
+) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex2.exchange],
