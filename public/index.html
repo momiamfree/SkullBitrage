@@ -239,8 +239,27 @@
                   return (
                     <tr key={i}>
                       <td>#{(page-1)*pageSize + i + 1}</td>
-                      <td className={apr>0 ? "text-success fw-bold" : apr<0 ? "text-danger fw-bold" : "text-muted"}>
-                        {apr ? Math.round(apr) + " %" : "-"}
+                      <td>
+                        {(() => {
+                          const fundingBuy = opp.avgFundingBuy;
+                          const fundingSell = opp.avgFundingSell;
+                          const sameSign = (fundingBuy >= 0 && fundingSell >= 0) || (fundingBuy <= 0 && fundingSell <= 0);
+                          const spreadPositive = opp.spread > 0;
+
+                          if (sameSign && spreadPositive) {
+                            return <span className="text-warning fw-bold">Negative</span>;
+                          }
+
+                          return (
+                            <span className={
+                              opp.apr > 0 ? "text-success fw-bold" :
+                              opp.apr < 0 ? "text-danger fw-bold" :
+                              "text-muted"
+                            }>
+                              {opp.apr ? Math.round(opp.apr) + " %" : "-"}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="fw-semibold">{opp.token}</td>
                       <td>
