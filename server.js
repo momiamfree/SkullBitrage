@@ -86,7 +86,7 @@ function buildOpportunities(token, ex1, ex2) {
       sellExchange: exchangeMap[ex2.exchange],
       avgFundingBuy: ex1.fundingRate,
       avgFundingSell: ex2.fundingRate,
-      apr: "NEGATIVE", // marcador especial
+      apr: -1, // marcador especial
       buyOI: ex1.openInterest,
       sellOI: ex2.openInterest,
       buyVolume: ex1.volume,
@@ -136,7 +136,7 @@ function buildOpportunities(token, ex1, ex2) {
       sellExchange: exchangeMap[ex1.exchange],
       avgFundingBuy: ex2.fundingRate,
       avgFundingSell: ex1.fundingRate,
-      apr: "NEGATIVE",
+      apr: -1,
       buyOI: ex2.openInterest,
       sellOI: ex1.openInterest,
       buyVolume: ex2.volume,
@@ -235,10 +235,20 @@ async function miniUpdate() {
       }
     }
 
-    // Sustituimos oportunidades antiguas de esos tokens por las nuevas
-    cachedOpportunities = cachedOpportunities.filter(
-      (o) => !activeTokens.includes(o.token)
-    ).concat(updatedOpps);
+    // 🔹 Actualizamos solo las entradas existentes
+    for (const opp of updatedOpps) {
+      const idx = cachedOpportunities.findIndex(
+        (o) =>
+          o.token === opp.token &&
+          o.buyExchange === opp.buyExchange &&
+          o.sellExchange === opp.sellExchange
+      );
+
+      if (idx !== -1) {
+        // Si existe, actualizamos valores
+        cachedOpportunities[idx] = opp;
+      }
+    }
 
     // 🔹 Actualizamos timestamp
     lastUpdate = new Date().toISOString();
@@ -248,6 +258,7 @@ async function miniUpdate() {
     console.error("❌ Error en miniUpdate:", err);
   }
 }
+
 
 
 // Lanzamos ambos ciclos

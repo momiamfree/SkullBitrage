@@ -108,8 +108,12 @@
           data.sort((a, b) => {
             let valA, valB;
             if (sortConfig.key === "apr") {
-              valA = (a.avgFundingSell - a.avgFundingBuy) * 8760 * 100;
-              valB = (b.avgFundingSell - b.avgFundingBuy) * 8760 * 100;
+              const normalize = (v) => {
+                if (v === -1) return -Infinity; // lo tratamos como el más bajo posible
+                return v;
+              };
+              valA = normalize(a.apr);
+              valB = normalize(b.apr);
             } else if (sortConfig.key === "spread") {
               valA = a.buyAsk && a.sellBid ? ((a.sellBid - a.buyAsk) / a.buyAsk) * 100 : 0;
               valB = b.buyAsk && b.sellBid ? ((b.sellBid - b.buyAsk) / b.buyAsk) * 100 : 0;
@@ -254,9 +258,16 @@
                   return (
                     <tr key={i}>
                       <td>#{(page-1)*pageSize + i + 1}</td>
-                      <td className={apr>0 ? "text-success fw-bold" : apr<0 ? "text-danger fw-bold" : "text-danger fw-bold"}>
-                        {opp.apr != "NEGATIVE" ? Math.round(opp.apr) + " %" : "< 0%"}
+                      <td className={
+                        opp.apr > 0 ? "text-success fw-bold" :
+                        opp.apr === -1 ? "text-danger fw-bold" : 
+                        opp.apr < 0 ? "text-danger fw-bold" : "text-muted"
+                      }>
+                        {opp.apr === -1 
+                          ? "< 0%" 
+                          : Math.round(opp.apr) + " %"}
                       </td>
+
                       <td className="fw-semibold">{opp.token}</td>
                       <td>
                         <div className="d-flex align-items-center justify-content-center gap-2">
