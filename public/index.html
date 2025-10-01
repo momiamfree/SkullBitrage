@@ -183,8 +183,34 @@
               </div>
             </div>
           </div>
+          {/* 🔹 Exchanges row con referral & descuento */}
+          <div className="d-flex flex-wrap justify-content-center gap-3 my-3 mt-5">
+            {/* Hyperliquid */}
+            <a href="https://app.hyperliquid.xyz/join/SKULLBITRAGE"
+              target="_blank" rel="noopener noreferrer nofollow sponsored"
+              className="d-flex align-items-center gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none hover-effect small">
+              <img src="https://yieldgapweb-production.up.railway.app/assets/logos/hl_logo.svg"
+                  alt="Hyperliquid" style={{width:"16px",height:"16px",objectFit:"contain"}}/>
+              <span>Hyperliquid</span>
+              <span className="ms-1 fw-semibold">4% off fees</span>
+            </a>
+
+            {/* Aster */}
+            <a href="https://www.asterdex.com/en/referral/F1d31d"
+              target="_blank" rel="noopener noreferrer nofollow sponsored"
+              className="d-flex align-items-center gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none hover-effect small">
+              <img src="https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg"
+                  alt="Aster" style={{width:"16px",height:"16px",objectFit:"contain"}}/>
+              <span>Aster</span>
+              <span className="ms-1 fw-semibold">6% off fees</span>
+            </a>
+
+
+          </div>
+
+
           {/* 🔹 Nueva fila con fecha de actualización */}
-          <div className="text-left mb-4 mt-5">
+          <div className="text-left mb-4 mt-2">
             <small style={{color:"#aaa"}}>
               Last update: {lastUpdated || "-"}
             </small>

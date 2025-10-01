@@ -39,6 +39,12 @@
     /* Keep table neat */
     .table thead th { white-space: nowrap; }
     .controls-row { gap: .5rem; }
+
+    .hover-effect:hover {
+      border-color: #0dcaf0 !important;
+      background: rgba(13,202,240,0.1);
+      color: #0dcaf0 !important;
+    }
     @media (max-width: 768px) {
       .header-right { flex-wrap: wrap; justify-content:flex-end; }
       .header-left { gap: .5rem; }
