@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import Aster from "./exchanges/Aster.js";
 import Lighter from "./exchanges/Lighter.js";
 import Hyperliquid from "./exchanges/Hyperliquid.js";
+import Pacifica from "./exchanges/Pacifica.js";
 
 const app = express();
 app.use(cors());
@@ -19,6 +20,7 @@ const PORT = process.env.PORT || 4000;
 const aster = new Aster();
 const lighter = new Lighter();
 const hyperliquid = new Hyperliquid();
+const pacifica = new Pacifica();
 
 const tokensAster = await aster.getAvailableTokens("USDT");
 //const tokensLighter = await lighter.getAvailableTokens();
@@ -27,7 +29,7 @@ const tokensHyper = await hyperliquid.getAvailableTokens();
 const allTokens = [...new Set([...tokensAster, /*...tokensLighter, */...tokensHyper])];
 
 // Mapeo exchanges a IDs (los mismos que el frontend usa)
-const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1 };
+const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
 // Cache
 let cachedOpportunities = [];
@@ -166,6 +168,7 @@ async function updateCache() {
         aster.getTokenData(token, "USDT"),
         lighter.getTokenData(token),
         hyperliquid.getTokenData(token),
+        pacifica.getTokenData(token),
       ]);
 
       const available = results

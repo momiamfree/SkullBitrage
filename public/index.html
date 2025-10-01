@@ -13,26 +13,6 @@
 </head>
 <body class="bg-dark text-light">
   <div id="root"></div>
-  <!-- Wallet Modal (triggered desde React buttons) -->
-  <div class="modal fade" id="walletModal" tabindex="-1" aria-labelledby="walletModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
-      <div class="modal-content bg-dark text-light">
-        <div class="modal-header">
-          <h5 class="modal-title" id="walletModalLabel">My wallet</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <p class="small mb-1">Address (copy to clipboard):</p>
-          <div class="input-group">
-            <input id="walletAddress" class="form-control bg-secondary text-light" value="0xYOUR_WALLET_ADDRESS" readonly />
-            <button class="btn btn-outline-light" id="copyWalletBtn" type="button">Copy</button>
-          </div>
-          <p class="mt-2 small text-muted">Support tips / donations via this address.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script type="text/babel">
     //const BASE_URL = "http://localhost:4000/api/opportunity";
     const BASE_URL = "/api/opportunity";
@@ -44,7 +24,7 @@
       { id: 4, name: "aster", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg", makerFee: 0.0001, takerFee: 0.00035 },
       //{ id: 5, name: "paradex", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/px_logo.svg", makerFee: 0, takerFee: 0 },
       { id: 6, name: "lighter", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/lt_logo.svg", makerFee: 0, takerFee: 0 },
-      //{ id: 7, name: "pacifica", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg", makerFee: 0.00015, takerFee: 0.0004 }
+      { id: 7, name: "pacifica", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg", makerFee: 0.00015, takerFee: 0.0004 }
     ];
 
     function formatNumber(n) {
@@ -146,7 +126,7 @@
         <div className="container-fluid bg-dark text-light min-vh-100 py-5">
           <div className="text-center mb-4">
             <span style={{fontSize:"1rem",color:"#fff"}}>
-              Support me to be blessed 🙏🏼: 
+              Support me to be blessed 🙏🏼:&nbsp;
               <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b>
             </span>
           </div>
@@ -215,6 +195,7 @@
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Token</th>
                   <th onClick={() => handleSort("apr")} style={{cursor:"pointer"}}>
                     {sortConfig.key==="apr" && (
                       sortConfig.direction==="asc" 
@@ -229,7 +210,6 @@
               Example: (FundingSell - FundingBuy) × 8760 (hours/year). 
               This approximates the yearly return of a delta-neutral position."></i>
                   </th>
-                  <th>Token</th>
                   <th>Long / Short</th>
                   <th onClick={() => handleSort("spread")} style={{cursor:"pointer"}}>
                     {sortConfig.key==="spread" && (
@@ -258,6 +238,7 @@
                   return (
                     <tr key={i}>
                       <td>#{(page-1)*pageSize + i + 1}</td>
+                      <td className="fw-semibold">{opp.token}</td>
                       <td className={
                         opp.apr > 0 ? "text-success fw-bold" :
                         opp.apr === -1 ? "text-danger fw-bold" : 
@@ -267,8 +248,6 @@
                           ? "< 0%" 
                           : Math.round(opp.apr) + " %"}
                       </td>
-
-                      <td className="fw-semibold">{opp.token}</td>
                       <td>
                         <div className="d-flex align-items-center justify-content-center gap-2">
                           {buyEx?.logoURL && <img src={buyEx.logoURL} alt={buyEx.name} style={{width:"20px",height:"20px"}} />}
