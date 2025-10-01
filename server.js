@@ -23,38 +23,38 @@ const hyperliquid = new Hyperliquid();
 const pacifica = new Pacifica();
 
 const tokensAster = await aster.getAvailableTokens("USDT");
-//const tokensLighter = await lighter.getAvailableTokens();
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
-const allTokens = [...new Set([...tokensAster, /*...tokensLighter, */...tokensHyper])];
+const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
 
-// Mapeo exchanges a IDs (los mismos que el frontend usa)
+// Mapeo exchanges a IDs
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
 // Cache
 let cachedOpportunities = [];
 let lastUpdate = null;
+
 const SNAPSHOT_FILE = path.join(__dirname, "data", "opportunities.json");
 
+// Cargar cache desde opportunities.json
 if (fs.existsSync(SNAPSHOT_FILE)) {
   try {
     const saved = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, "utf-8"));
     cachedOpportunities = saved.opportunities || [];
     lastUpdate = saved.lastUpdate || null;
-    console.log(`📂 Snapshot cargado con ${cachedOpportunities.length} oportunidades`);
+    console.log(`📂 Cache cargada con ${cachedOpportunities.length} oportunidades`);
   } catch (err) {
-    console.error("⚠️ Error leyendo snapshot:", err.message);
+    console.error("⚠️ Error leyendo cache:", err.message);
   }
 }
+
 // Construcción de oportunidades
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
 
-  // --- Dirección 1: ex1 -> ex2 ---
   const apr1 = (ex2.fundingRate - ex1.fundingRate) * 8760;
   const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
 
-  // Caso 1: funding de distinto signo -> siempre oportunidad (aunque spread sea negativo)
   if (
     ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
       (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
@@ -79,16 +79,14 @@ function buildOpportunities(token, ex1, ex2) {
       sellMidPrice: ex2.midPrice,
       spread: spread1,
     });
-  }
-  // Caso 2: funding mismo signo pero spread positivo
-  else if (spread1 > 0) {
+  } else if (spread1 > 0) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
       sellExchange: exchangeMap[ex2.exchange],
       avgFundingBuy: ex1.fundingRate,
       avgFundingSell: ex2.fundingRate,
-      apr: -1, // marcador especial
+      apr: -1,
       buyOI: ex1.openInterest,
       sellOI: ex2.openInterest,
       buyVolume: ex1.volume,
@@ -103,7 +101,6 @@ function buildOpportunities(token, ex1, ex2) {
     });
   }
 
-  // --- Dirección 2: ex2 -> ex1 ---
   const apr2 = (ex1.fundingRate - ex2.fundingRate) * 8760;
   const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
 
@@ -156,119 +153,55 @@ function buildOpportunities(token, ex1, ex2) {
   return opportunities;
 }
 
-// Actualizador grande (todos los tokens)
+// Ciclo grande: actualiza dinámicamente
 async function updateCache() {
-  try {
-    console.log("♻️ Actualizando oportunidades (ciclo grande)...");
-    let opportunities = [];
+  console.log("♻️ Actualizando oportunidades (ciclo grande)...");
+  lastUpdate = new Date().toISOString();
 
-    for (const token of allTokens) {
-      console.log("🌀 Procesando " + token);
-      const results = await Promise.allSettled([
-        aster.getTokenData(token, "USDT"),
-        lighter.getTokenData(token),
-        hyperliquid.getTokenData(token),
-        pacifica.getTokenData(token),
-      ]);
+  for (const token of allTokens) {
+    console.log("🌀 Procesando " + token);
 
-      const available = results
-        .filter((r) => r.status === "fulfilled")
-        .map((r) => r.value);
+    const results = await Promise.allSettled([
+      aster.getTokenData(token, "USDT"),
+      lighter.getTokenData(token),
+      hyperliquid.getTokenData(token),
+      pacifica.getTokenData(token),
+    ]);
 
-      for (let i = 0; i < available.length; i++) {
-        for (let j = i + 1; j < available.length; j++) {
-          opportunities.push(...buildOpportunities(token, available[i], available[j]));
-        }
+    const available = results
+      .filter((r) => r.status === "fulfilled" && r.value)
+      .map((r) => r.value);
+
+    let newOpps = [];
+    for (let i = 0; i < available.length; i++) {
+      for (let j = i + 1; j < available.length; j++) {
+        newOpps.push(...buildOpportunities(token, available[i], available[j]));
       }
     }
 
-    const seen = new Set();
-    opportunities = opportunities.filter((opp) => {
-      const key = `${opp.token}-${opp.buyExchange}-${opp.sellExchange}`;
-      const inverseKey = `${opp.token}-${opp.sellExchange}-${opp.buyExchange}`;
-      if (opp.apr <= 0 && opp.spread <= 0) return false;
-      if (seen.has(inverseKey)) return false;
-      seen.add(key);
-      return true;
-    });
+    // 🔹 limpiar viejas oportunidades de ese token
+    cachedOpportunities = cachedOpportunities.filter((opp) => opp.token !== token);
 
-    cachedOpportunities = opportunities;
-    lastUpdate = new Date().toISOString();
+    // 🔹 añadir las nuevas
+    if (newOpps.length) cachedOpportunities.push(...newOpps);
 
-    const dir = path.dirname(SNAPSHOT_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    // 🔹 snapshot parcial
     fs.writeFileSync(
       SNAPSHOT_FILE,
       JSON.stringify({ lastUpdate, opportunities: cachedOpportunities }, null, 2)
     );
 
-    console.log(`✅ Cache actualizada con ${cachedOpportunities.length} oportunidades`);
-
-    // Reprogramar el ciclo grande
-    setTimeout(updateCache, 60 * 1000); // cada 60s
-  } catch (err) {
-    console.error("❌ Error actualizando cache:", err);
-    setTimeout(updateCache, 60 * 1000); // reintentar en 60s
+    // ⏳ esperar 1 segundo entre tokens
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+
+  console.log(`🎯 Ciclo grande terminado. Total oportunidades: ${cachedOpportunities.length}`);
+  updateCache()
 }
 
-// Mini-actualización (solo tokens ya detectados)
-async function miniUpdate() {
-  try {
-    if (!cachedOpportunities.length) return;
+updateCache();
 
-    const activeTokens = [...new Set(cachedOpportunities.map((o) => o.token))];
-    let updatedOpps = [];
-
-    for (const token of activeTokens) {
-      const results = await Promise.allSettled([
-        aster.getTokenData(token, "USDT"),
-        lighter.getTokenData(token),
-        hyperliquid.getTokenData(token),
-      ]);
-
-      const available = results
-        .filter((r) => r.status === "fulfilled")
-        .map((r) => r.value);
-
-      for (let i = 0; i < available.length; i++) {
-        for (let j = i + 1; j < available.length; j++) {
-          updatedOpps.push(...buildOpportunities(token, available[i], available[j]));
-        }
-      }
-    }
-
-    // 🔹 Actualizamos solo las entradas existentes
-    for (const opp of updatedOpps) {
-      const idx = cachedOpportunities.findIndex(
-        (o) =>
-          o.token === opp.token &&
-          o.buyExchange === opp.buyExchange &&
-          o.sellExchange === opp.sellExchange
-      );
-
-      if (idx !== -1) {
-        // Si existe, actualizamos valores
-        cachedOpportunities[idx] = opp;
-      }
-    }
-
-    // 🔹 Actualizamos timestamp
-    lastUpdate = new Date().toISOString();
-
-    console.log(`⚡ Mini update: ${updatedOpps.length} oportunidades refrescadas`);
-  } catch (err) {
-    console.error("❌ Error en miniUpdate:", err);
-  }
-}
-
-
-
-// Lanzamos ambos ciclos
-updateCache(); // grande
-setInterval(miniUpdate, 10 * 1000); // mini cada 10s
-
-// Endpoint: filtra desde la cache según exchanges seleccionados
+// API
 app.get("/api/opportunity", (req, res) => {
   const { exchanges } = req.query;
   let opportunities = cachedOpportunities;

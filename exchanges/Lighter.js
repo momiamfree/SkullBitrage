@@ -30,20 +30,28 @@ export default class Lighter {
       const volume = parseFloat(market.daily_quote_token_volume ?? 0);
 
       // 2️⃣ Funding rate dinámico (última hora, elegir el más actual)
-      const now = Math.floor(Date.now() / 1000); // segundos
-      const oneHourAgo = now - 3600;
+      const endTime = Math.floor(Date.now() / 1000) + 7200; // segundos
+      const startTime = Date.now();
 
       const fundingRes = await safeFetch(
-        `${this.baseUrl}/fundings?market_id=${marketId}&resolution=1h&start_timestamp=${oneHourAgo}&end_timestamp=${now}&count_back=10`
+        `${this.baseUrl}/fundings?market_id=${marketId}&resolution=1h&start_timestamp=${startTime}&end_timestamp=${endTime}&count_back=10`
       );
 
       let fundingRate = 0;
       if (fundingRes?.fundings?.length > 0) {
-        // Buscar el funding con mayor timestamp
+        // Buscar el funding más reciente
         const latest = fundingRes.fundings.reduce((a, b) =>
           a.timestamp > b.timestamp ? a : b
         );
+
         fundingRate = parseFloat(latest.rate ?? 0);
+
+        // Ajustar signo según direction
+        if (latest.direction === "short") {
+          fundingRate = -Math.abs(fundingRate); // shorts pagan → negativo
+        } else if (latest.direction === "long") {
+          fundingRate = Math.abs(fundingRate); // longs pagan → positivo
+        }
       }
       console.log("Lighter funding rate token " + token + ' -> ' + fundingRate  )
       // 3️⃣ Obtener mejor bid/ask real de orderBookOrders
@@ -69,7 +77,7 @@ export default class Lighter {
         midPrice: bestBid && bestAsk ? (bestBid + bestAsk) / 2 : lastPrice,
       };
     } catch (err) {
-
+      Console.LOG('LIGHTER ERROR -> ' + err)
       throw err;
     }
   }
