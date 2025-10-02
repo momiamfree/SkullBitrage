@@ -42,7 +42,7 @@ export default class Lighter {
         const latest = fundingRes.fundings.reduce((a, b) =>
           a.timestamp > b.timestamp ? a : b
         );
-        fundingRate = parseFloat(latest.rate ?? 0) / 8;
+        fundingRate = parseFloat(latest.rate ?? 0);
 
         // 👇 Ajustar signo según direction
         if (latest.direction?.toLowerCase() === "short") {
