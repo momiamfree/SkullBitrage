@@ -30,8 +30,8 @@ export default class Lighter {
       const volume = parseFloat(market.daily_quote_token_volume ?? 0);
 
       // 2️⃣ Funding rate dinámico (última hora, elegir el más actual)
-      const endTime = Math.floor(Date.now() / 1000) + 14400; // segundos
-      const startTime = Date.now() + 7200;
+      const endTime = Math.floor(Date.now() / 1000) + 3600; // segundos
+      const startTime = Date.now() - 3600;
 
       const fundingRes = await safeFetch(
         `${this.baseUrl}/fundings?market_id=${marketId}&resolution=1h&start_timestamp=${startTime}&end_timestamp=${endTime}&count_back=10`

@@ -26,7 +26,7 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
 const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
-//const allTokens = ['KAITO']
+//const allTokens = ['YZY']
 // Mapeo exchanges a IDs
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
