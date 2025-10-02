@@ -17,11 +17,11 @@ export default class Lighter {
 
   async getTokenData(token) {
     try {
-   
       // 1️⃣ Buscar market_id dinámicamente en orderBookDetails
       const detailsRes = await safeFetch(`${this.baseUrl}/orderBookDetails`);
       const details = detailsRes?.order_book_details ?? [];
-      const market = details.find(d => d.symbol === token);
+      const market = details.find((d) => d.symbol === token);
+      if (!market) return null;
 
       const marketId = market.market_id;
       const lastPrice = parseFloat(market.last_trade_price ?? 0);
@@ -39,21 +39,22 @@ export default class Lighter {
 
       let fundingRate = 0;
       if (fundingRes?.fundings?.length > 0) {
-        // Buscar el funding más reciente
         const latest = fundingRes.fundings.reduce((a, b) =>
           a.timestamp > b.timestamp ? a : b
         );
-
         fundingRate = parseFloat(latest.rate ?? 0);
 
-        // Ajustar signo según direction
-        if (latest.direction === "short") {
-          fundingRate = -Math.abs(fundingRate); // shorts pagan → negativo
-        } else if (latest.direction === "long") {
-          fundingRate = Math.abs(fundingRate); // longs pagan → positivo
+        // 👇 Ajustar signo según direction
+        if (latest.direction?.toLowerCase() === "short") {
+          fundingRate = -Math.abs(fundingRate);
+        } else if (latest.direction?.toLowerCase() === "long") {
+          fundingRate = Math.abs(fundingRate);
         }
+        console.log(
+          `Lighter funding rate token ${token} -> ${fundingRate} (dir=${latest.direction})`
+        );
       }
-      console.log("Lighter funding rate token " + token + ' -> ' + fundingRate  )
+
       // 3️⃣ Obtener mejor bid/ask real de orderBookOrders
       const orderRes = await safeFetch(
         `${this.baseUrl}/orderBookOrders?market_id=${marketId}&limit=1`
@@ -69,7 +70,7 @@ export default class Lighter {
       return {
         exchange: this.name,
         token: market.symbol || token,
-        fundingRate, // ✅ último funding disponible
+        fundingRate,
         openInterest: openInterestUSD,
         volume,
         bid: bestBid,
@@ -77,8 +78,8 @@ export default class Lighter {
         midPrice: bestBid && bestAsk ? (bestBid + bestAsk) / 2 : lastPrice,
       };
     } catch (err) {
-      Console.LOG('LIGHTER ERROR -> ' + err)
-      throw err;
+      console.log("LIGHTER ERROR ->", err.message || err);
+      return null;
     }
   }
 }

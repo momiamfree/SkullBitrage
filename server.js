@@ -26,7 +26,7 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
 const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
-
+//const allTokens = ['KAITO']
 // Mapeo exchanges a IDs
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
@@ -48,18 +48,33 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
   }
 }
 
-// Construcción de oportunidades
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
 
-  const apr1 = (ex2.fundingRate - ex1.fundingRate) * 8760;
-  const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
+  function calcApr(longEx, shortEx) {
+    let gain = 0;
 
-  if (
-    ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
-      (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
-    apr1 > 1
-  ) {
+    // Long side
+    if (longEx.fundingRate < 0) {
+      gain += Math.abs(longEx.fundingRate); // te pagan
+    } else {
+      gain -= longEx.fundingRate; // te cobran
+    }
+
+    // Short side
+    if (shortEx.fundingRate > 0) {
+      gain += shortEx.fundingRate; // te pagan
+    } else {
+      gain -= Math.abs(shortEx.fundingRate); // te cobran
+    }
+
+    return gain * 8760;
+  }
+
+  // Estrategia 1: long en ex1, short en ex2
+  const apr1 = calcApr(ex1, ex2);
+  if (apr1 > 1) {
+    const spread = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
@@ -77,38 +92,14 @@ function buildOpportunities(token, ex1, ex2) {
       sellBid: ex2.bid,
       sellAsk: ex2.ask,
       sellMidPrice: ex2.midPrice,
-      spread: spread1,
-    });
-  } else if (spread1 > 0) {
-    opportunities.push({
-      token,
-      buyExchange: exchangeMap[ex1.exchange],
-      sellExchange: exchangeMap[ex2.exchange],
-      avgFundingBuy: ex1.fundingRate,
-      avgFundingSell: ex2.fundingRate,
-      apr: -1,
-      buyOI: ex1.openInterest,
-      sellOI: ex2.openInterest,
-      buyVolume: ex1.volume,
-      sellVolume: ex2.volume,
-      buyBid: ex1.bid,
-      buyAsk: ex1.ask,
-      buyMidPrice: ex1.midPrice,
-      sellBid: ex2.bid,
-      sellAsk: ex2.ask,
-      sellMidPrice: ex2.midPrice,
-      spread: spread1,
+      spread,
     });
   }
 
-  const apr2 = (ex1.fundingRate - ex2.fundingRate) * 8760;
-  const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
-
-  if (
-    ((ex1.fundingRate > 0 && ex2.fundingRate < 0) ||
-      (ex1.fundingRate < 0 && ex2.fundingRate > 0)) &&
-    apr2 > 1
-  ) {
+  // Estrategia 2: long en ex2, short en ex1
+  const apr2 = calcApr(ex2, ex1);
+  if (apr2 > 1) {
+    const spread = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex2.exchange],
@@ -126,27 +117,7 @@ function buildOpportunities(token, ex1, ex2) {
       sellBid: ex1.bid,
       sellAsk: ex1.ask,
       sellMidPrice: ex1.midPrice,
-      spread: spread2,
-    });
-  } else if (spread2 > 0) {
-    opportunities.push({
-      token,
-      buyExchange: exchangeMap[ex2.exchange],
-      sellExchange: exchangeMap[ex1.exchange],
-      avgFundingBuy: ex2.fundingRate,
-      avgFundingSell: ex1.fundingRate,
-      apr: -1,
-      buyOI: ex2.openInterest,
-      sellOI: ex1.openInterest,
-      buyVolume: ex2.volume,
-      sellVolume: ex1.volume,
-      buyBid: ex2.bid,
-      buyAsk: ex2.ask,
-      buyMidPrice: ex2.midPrice,
-      sellBid: ex1.bid,
-      sellAsk: ex1.ask,
-      sellMidPrice: ex1.midPrice,
-      spread: spread2,
+      spread,
     });
   }
 
