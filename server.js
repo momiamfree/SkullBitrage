@@ -51,6 +51,7 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
 
+  // Función para calcular APR neto de funding (según posición)
   function calcApr(longEx, shortEx) {
     let gain = 0;
 
@@ -71,10 +72,11 @@ function buildOpportunities(token, ex1, ex2) {
     return gain * 8760;
   }
 
-  // Estrategia 1: long en ex1, short en ex2
+  // --- Estrategia 1: long en ex1, short en ex2 ---
   const apr1 = calcApr(ex1, ex2);
-  if (apr1 > 1) {
-    const spread = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
+  const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
+
+  if (apr1 > 1 || (spread1 !== null && spread1 > 0)) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex1.exchange],
@@ -92,14 +94,15 @@ function buildOpportunities(token, ex1, ex2) {
       sellBid: ex2.bid,
       sellAsk: ex2.ask,
       sellMidPrice: ex2.midPrice,
-      spread,
+      spread: spread1,
     });
   }
 
-  // Estrategia 2: long en ex2, short en ex1
+  // --- Estrategia 2: long en ex2, short en ex1 ---
   const apr2 = calcApr(ex2, ex1);
-  if (apr2 > 1) {
-    const spread = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
+  const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
+
+  if (apr2 > 1 || (spread2 !== null && spread2 > 0)) {
     opportunities.push({
       token,
       buyExchange: exchangeMap[ex2.exchange],
@@ -117,12 +120,13 @@ function buildOpportunities(token, ex1, ex2) {
       sellBid: ex1.bid,
       sellAsk: ex1.ask,
       sellMidPrice: ex1.midPrice,
-      spread,
+      spread: spread2,
     });
   }
 
   return opportunities;
 }
+
 
 // Ciclo grande: actualiza dinámicamente
 async function updateCache() {

@@ -256,13 +256,11 @@
                       <td>#{(page-1)*pageSize + i + 1}</td>
                       <td className="fw-semibold">{opp.token}</td>
                       <td className={
-                        opp.apr > 0 ? "text-success fw-bold" :
-                        opp.apr === -1 ? "text-danger fw-bold" : 
-                        opp.apr < 0 ? "text-danger fw-bold" : "text-muted"
+                        opp.apr > 1 ? "text-success fw-bold" :
+                        opp.apr === -0 ? "text-danger fw-bold" : 
+                        opp.apr < 1 ? "text-danger fw-bold" : "text-danger fw-bold"
                       }>
-                        {opp.apr === -1 
-                          ? "< 0%" 
-                          : Math.round(opp.apr) + " %"}
+                        {Math.round(opp.apr) + " %"}
                       </td>
                       <td>
                         <div className="d-flex align-items-center justify-content-center gap-2">
