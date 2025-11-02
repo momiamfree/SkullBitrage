@@ -1,0 +1,49 @@
+# ============================
+# 🌐 SkullBitrage .gitignore
+# ============================
+
+# 🧠 Entornos y variables sensibles
+.env
+
+# 📦 Dependencias
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 🗂️ Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# 🧰 Compilaciones / builds (si usas herramientas)
+dist/
+build/
+.cache/
+.tmp/
+
+# 🧪 Logs y reportes
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# ⚙️ Railway / Deployment
+railway.json
+.vercel/
+.netlify/
+.env.production
+.env.local
+
+# 🧩 Archivos editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# 🧾 Datos generados por tu app
+data/opportunities.json
+data/opportunitiesUpdated.json

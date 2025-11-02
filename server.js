@@ -4,11 +4,15 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 import Aster from "./exchanges/Aster.js";
 import Lighter from "./exchanges/Lighter.js";
 import Hyperliquid from "./exchanges/Hyperliquid.js";
 import Pacifica from "./exchanges/Pacifica.js";
+
+// Cargar variables de entorno (.env local o Railway env vars)
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -17,6 +21,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 4000;
+
+// --- 🔐 Middleware de autenticación solo para endpoints /api ---
+app.use("/api", (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token || token !== process.env.API_TOKEN) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  next();
+});
+
+// --- 🔹 Endpoint para enviar token al frontend (NO protegido) ---
+app.get("/config.js", (req, res) => {
+  res.setHeader("Content-Type", "application/javascript");
+  res.send(`window.API_TOKEN = "${process.env.API_TOKEN || ""}";`);
+});
+
 const aster = new Aster();
 const lighter = new Lighter();
 const hyperliquid = new Hyperliquid();
@@ -26,7 +49,8 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
 const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
-//const allTokens = ['YZY']
+// const allTokens = ['YZY'];
+
 // Mapeo exchanges a IDs
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
@@ -48,31 +72,26 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
   }
 }
 
+// ------------------ 🔧 Construcción de oportunidades ------------------
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
 
-  // Función para calcular APR neto de funding (según posición)
   function calcApr(longEx, shortEx) {
     let gain = 0;
-
-    // Long side
     if (longEx.fundingRate < 0) {
-      gain += Math.abs(longEx.fundingRate); // te pagan
+      gain += Math.abs(longEx.fundingRate);
     } else {
-      gain -= longEx.fundingRate; // te cobran
+      gain -= longEx.fundingRate;
     }
-
-    // Short side
     if (shortEx.fundingRate > 0) {
-      gain += shortEx.fundingRate; // te pagan
+      gain += shortEx.fundingRate;
     } else {
-      gain -= Math.abs(shortEx.fundingRate); // te cobran
+      gain -= Math.abs(shortEx.fundingRate);
     }
-
     return gain * 8760;
   }
 
-  // --- Estrategia 1: long en ex1, short en ex2 ---
+  // Estrategia 1: long ex1, short ex2
   const apr1 = calcApr(ex1, ex2);
   const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
 
@@ -98,7 +117,7 @@ function buildOpportunities(token, ex1, ex2) {
     });
   }
 
-  // --- Estrategia 2: long en ex2, short en ex1 ---
+  // Estrategia 2: long ex2, short ex1
   const apr2 = calcApr(ex2, ex1);
   const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
 
@@ -127,8 +146,7 @@ function buildOpportunities(token, ex1, ex2) {
   return opportunities;
 }
 
-
-// Ciclo grande: actualiza dinámicamente
+// ------------------ 🔁 Ciclo grande (actualización dinámica) ------------------
 async function updateCache() {
   console.log("♻️ Actualizando oportunidades (ciclo grande)...");
   lastUpdate = new Date().toISOString();
@@ -154,29 +172,24 @@ async function updateCache() {
       }
     }
 
-    // 🔹 limpiar viejas oportunidades de ese token
     cachedOpportunities = cachedOpportunities.filter((opp) => opp.token !== token);
-
-    // 🔹 añadir las nuevas
     if (newOpps.length) cachedOpportunities.push(...newOpps);
 
-    // 🔹 snapshot parcial
     fs.writeFileSync(
       SNAPSHOT_FILE,
       JSON.stringify({ lastUpdate, opportunities: cachedOpportunities }, null, 2)
     );
 
-    // ⏳ esperar 1 segundo entre tokens
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   console.log(`🎯 Ciclo grande terminado. Total oportunidades: ${cachedOpportunities.length}`);
-  updateCache()
+  updateCache();
 }
 
 updateCache();
 
-// API
+// ------------------ 🌐 API protegida ------------------
 app.get("/api/opportunity", (req, res) => {
   const { exchanges } = req.query;
   let opportunities = cachedOpportunities;
@@ -202,12 +215,13 @@ app.get("/api/opportunity", (req, res) => {
   res.json({ lastUpdate, opportunities });
 });
 
-// Frontend
+// ------------------ 🖥️ Frontend público ------------------
 app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// ------------------ 🚀 Start ------------------
 app.listen(PORT, () => {
   console.log(`✅ Proxy corriendo en http://localhost:${PORT}`);
 });

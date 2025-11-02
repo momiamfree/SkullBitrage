@@ -10,19 +10,19 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 🔹 Cargar token desde el backend -->
+  <script src="/config.js"></script>
 </head>
 <body class="bg-dark text-light">
   <div id="root"></div>
+
   <script type="text/babel">
-    //const BASE_URL = "http://localhost:4000/api/opportunity";
     const BASE_URL = "/api/opportunity";
 
     const EXCHANGES = [
       { id: 1, name: "hyperliquid", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/hl_logo.svg", makerFee: 0.00015, takerFee: 0.0004 },
-      //{ id: 2, name: "extended", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/ex_logo.svg", makerFee: 0, takerFee: 0.00025 },
-      //{ id: 3, name: "backpack", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/bp_logo.svg", makerFee: 0.0002, takerFee: 0.0005 },
       { id: 4, name: "aster", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg", makerFee: 0.0001, takerFee: 0.00035 },
-      //{ id: 5, name: "paradex", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/px_logo.svg", makerFee: 0, takerFee: 0 },
       { id: 6, name: "lighter", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/lt_logo.svg", makerFee: 0, takerFee: 0 },
       { id: 7, name: "pacifica", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg", makerFee: 0.00015, takerFee: 0.0004 }
     ];
@@ -35,38 +35,46 @@
       return Number(n).toLocaleString();
     }
 
-  function YieldGapArbUI() {
-    const [opps, setOpps] = React.useState([]);
-    const [lastUpdated, setLastUpdated] = React.useState(null);
-    const [searchToken, setSearchToken] = React.useState("");
-    const [filterExchange, setFilterExchange] = React.useState("");
-    const [sortConfig, setSortConfig] = React.useState({ key: "apr", direction: "desc" });
-    const [page, setPage] = React.useState(1);
-    const pageSize = 20;
+    function YieldGapArbUI() {
+      const [opps, setOpps] = React.useState([]);
+      const [lastUpdated, setLastUpdated] = React.useState(null);
+      const [searchToken, setSearchToken] = React.useState("");
+      const [filterExchange, setFilterExchange] = React.useState("");
+      const [sortConfig, setSortConfig] = React.useState({ key: "apr", direction: "desc" });
+      const [page, setPage] = React.useState(1);
+      const pageSize = 20;
 
-    const exchMap = React.useMemo(() => {
-      const m = {};
-      EXCHANGES.forEach(e => m[e.id] = e);
-      return m;
-    }, []);
+      const exchMap = React.useMemo(() => {
+        const m = {};
+        EXCHANGES.forEach(e => m[e.id] = e);
+        return m;
+      }, []);
 
-    // 🔹 Estado inicial con todos los IDs
-    const [selectedExchanges, setSelectedExchanges] = React.useState(EXCHANGES.map(ex => ex.id));
+      const [selectedExchanges, setSelectedExchanges] = React.useState(EXCHANGES.map(ex => ex.id));
 
-    const fetchOpp = async () => {
-      try {
-        const query = selectedExchanges.length ? `?exchanges=${selectedExchanges.join(",")}` : "";
-        const resp = await fetch(BASE_URL + query);
-        const json = await resp.json();
-        setOpps(Array.isArray(json.opportunities) ? json.opportunities : []);
-        setLastUpdated(json.lastUpdate ? new Date(json.lastUpdate).toLocaleTimeString() : "-");
-      } catch (err) {
-        console.error(err);
-      }
-    };
+      const fetchOpp = async () => {
+        try {
+          const query = selectedExchanges.length ? `?exchanges=${selectedExchanges.join(",")}` : "";
 
-    React.useEffect(() => { fetchOpp(); }, [selectedExchanges]);
-    React.useEffect(() => { const i = setInterval(fetchOpp, 10000); return () => clearInterval(i); }, [selectedExchanges]);
+          // 🔐 Enviar header de autenticación
+          const resp = await fetch(BASE_URL + query, {
+            headers: {
+              "Authorization": `Bearer ${window.API_TOKEN || ""}`
+            }
+          });
+
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const json = await resp.json();
+
+          setOpps(Array.isArray(json.opportunities) ? json.opportunities : []);
+          setLastUpdated(json.lastUpdate ? new Date(json.lastUpdate).toLocaleTimeString() : "-");
+        } catch (err) {
+          console.error("Error fetching opportunities:", err);
+        }
+      };
+
+      React.useEffect(() => { fetchOpp(); }, [selectedExchanges]);
+      React.useEffect(() => { const i = setInterval(fetchOpp, 10000); return () => clearInterval(i); }, [selectedExchanges]);
 
       const sortedFilteredOpps = React.useMemo(() => {
         let data = [...opps];
