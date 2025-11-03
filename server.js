@@ -11,7 +11,7 @@ import Lighter from "./exchanges/Lighter.js";
 import Hyperliquid from "./exchanges/Hyperliquid.js";
 import Pacifica from "./exchanges/Pacifica.js";
 
-// Cargar variables de entorno (.env local o Railway env vars)
+// 🔹 Cargar variables de entorno (.env local o Railway env vars)
 dotenv.config();
 
 const app = express();
@@ -22,7 +22,27 @@ const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 4000;
 
-// --- 🔐 Middleware de autenticación solo para endpoints /api ---
+// ----------------------------------------------------
+// 🔒 Middleware: solo dominios autorizados (en /api)
+// ----------------------------------------------------
+app.use("/api", (req, res, next) => {
+  const origin = req.get("origin") || req.get("referer") || "";
+  const allowed = [
+    "https://www.skullbitrage.com",
+    "http://localhost:4000"
+  ];
+
+  if (!origin || !allowed.some((a) => origin.startsWith(a))) {
+    console.warn("🚫 Bloqueado acceso desde:", origin);
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  next();
+});
+
+// ----------------------------------------------------
+// 🔐 Autenticación por token (en /api)
+// ----------------------------------------------------
 app.use("/api", (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -34,12 +54,17 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// --- 🔹 Endpoint para enviar token al frontend (NO protegido) ---
+// ----------------------------------------------------
+// 🔹 Endpoint público para pasar el token al frontend
+// ----------------------------------------------------
 app.get("/config.js", (req, res) => {
   res.setHeader("Content-Type", "application/javascript");
   res.send(`window.API_TOKEN = "${process.env.API_TOKEN || ""}";`);
 });
 
+// ----------------------------------------------------
+// 🔧 Inicialización de exchanges
+// ----------------------------------------------------
 const aster = new Aster();
 const lighter = new Lighter();
 const hyperliquid = new Hyperliquid();
@@ -49,18 +74,18 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
 const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
-// const allTokens = ['YZY'];
+// const allTokens = ["YZY"]; // para test
 
-// Mapeo exchanges a IDs
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
-// Cache
 let cachedOpportunities = [];
 let lastUpdate = null;
 
 const SNAPSHOT_FILE = path.join(__dirname, "data", "opportunities.json");
 
-// Cargar cache desde opportunities.json
+// ----------------------------------------------------
+// 📦 Cargar cache local (si existe)
+// ----------------------------------------------------
 if (fs.existsSync(SNAPSHOT_FILE)) {
   try {
     const saved = JSON.parse(fs.readFileSync(SNAPSHOT_FILE, "utf-8"));
@@ -72,26 +97,24 @@ if (fs.existsSync(SNAPSHOT_FILE)) {
   }
 }
 
-// ------------------ 🔧 Construcción de oportunidades ------------------
+// ----------------------------------------------------
+// ⚙️ Construcción de oportunidades
+// ----------------------------------------------------
 function buildOpportunities(token, ex1, ex2) {
   const opportunities = [];
 
   function calcApr(longEx, shortEx) {
     let gain = 0;
-    if (longEx.fundingRate < 0) {
-      gain += Math.abs(longEx.fundingRate);
-    } else {
-      gain -= longEx.fundingRate;
-    }
-    if (shortEx.fundingRate > 0) {
-      gain += shortEx.fundingRate;
-    } else {
-      gain -= Math.abs(shortEx.fundingRate);
-    }
+    if (longEx.fundingRate < 0) gain += Math.abs(longEx.fundingRate);
+    else gain -= longEx.fundingRate;
+
+    if (shortEx.fundingRate > 0) gain += shortEx.fundingRate;
+    else gain -= Math.abs(shortEx.fundingRate);
+
     return gain * 8760;
   }
 
-  // Estrategia 1: long ex1, short ex2
+  // --- Estrategia 1: long ex1, short ex2 ---
   const apr1 = calcApr(ex1, ex2);
   const spread1 = ex1.ask && ex2.bid ? (ex2.bid - ex1.ask) / ex1.ask : null;
 
@@ -117,7 +140,7 @@ function buildOpportunities(token, ex1, ex2) {
     });
   }
 
-  // Estrategia 2: long ex2, short ex1
+  // --- Estrategia 2: long ex2, short ex1 ---
   const apr2 = calcApr(ex2, ex1);
   const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
 
@@ -146,13 +169,15 @@ function buildOpportunities(token, ex1, ex2) {
   return opportunities;
 }
 
-// ------------------ 🔁 Ciclo grande (actualización dinámica) ------------------
+// ----------------------------------------------------
+// 🔁 Actualización dinámica de datos
+// ----------------------------------------------------
 async function updateCache() {
-  console.log("♻️ Actualizando oportunidades (ciclo grande)...");
+  console.log("♻️ Actualizando oportunidades...");
   lastUpdate = new Date().toISOString();
 
   for (const token of allTokens) {
-    console.log("🌀 Procesando " + token);
+    console.log("🌀 Procesando:", token);
 
     const results = await Promise.allSettled([
       aster.getTokenData(token, "USDT"),
@@ -161,47 +186,39 @@ async function updateCache() {
       pacifica.getTokenData(token),
     ]);
 
-    const available = results
-      .filter((r) => r.status === "fulfilled" && r.value)
-      .map((r) => r.value);
-
+    const available = results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
     let newOpps = [];
+
     for (let i = 0; i < available.length; i++) {
       for (let j = i + 1; j < available.length; j++) {
         newOpps.push(...buildOpportunities(token, available[i], available[j]));
       }
     }
 
-    cachedOpportunities = cachedOpportunities.filter((opp) => opp.token !== token);
+    cachedOpportunities = cachedOpportunities.filter(o => o.token !== token);
     if (newOpps.length) cachedOpportunities.push(...newOpps);
 
-    fs.writeFileSync(
-      SNAPSHOT_FILE,
-      JSON.stringify({ lastUpdate, opportunities: cachedOpportunities }, null, 2)
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify({ lastUpdate, opportunities: cachedOpportunities }, null, 2));
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
-  console.log(`🎯 Ciclo grande terminado. Total oportunidades: ${cachedOpportunities.length}`);
+  console.log(`🎯 Ciclo completado. Total: ${cachedOpportunities.length}`);
   updateCache();
 }
 
 updateCache();
 
-// ------------------ 🌐 API protegida ------------------
+// ----------------------------------------------------
+// 🌐 API protegida
+// ----------------------------------------------------
 app.get("/api/opportunity", (req, res) => {
   const { exchanges } = req.query;
   let opportunities = cachedOpportunities;
 
   if (typeof exchanges !== "undefined") {
-    const selected =
-      exchanges === ""
-        ? []
-        : exchanges
-            .split(",")
-            .map((id) => parseInt(id.trim(), 10))
-            .filter((n) => !isNaN(n));
+    const selected = exchanges
+      ? exchanges.split(",").map((id) => parseInt(id.trim(), 10)).filter((n) => !isNaN(n))
+      : [];
 
     if (selected.length === 0) {
       return res.json({ lastUpdate, opportunities: [] });
@@ -215,13 +232,17 @@ app.get("/api/opportunity", (req, res) => {
   res.json({ lastUpdate, opportunities });
 });
 
-// ------------------ 🖥️ Frontend público ------------------
+// ----------------------------------------------------
+// 🖥️ Servir frontend
+// ----------------------------------------------------
 app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ------------------ 🚀 Start ------------------
+// ----------------------------------------------------
+// 🚀 Arranque del servidor
+// ----------------------------------------------------
 app.listen(PORT, () => {
   console.log(`✅ Proxy corriendo en http://localhost:${PORT}`);
 });
