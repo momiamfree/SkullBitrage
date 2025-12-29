@@ -32,11 +32,11 @@ app.use("/api", (req, res, next) => {
     "http://localhost:4000"
   ];
 
-  if (!origin || !allowed.some((a) => origin.startsWith(a))) {
+  if (!origin || !allowed.some(a => origin.startsWith(a))) {
     console.warn("🚫 Bloqueado acceso desde:", origin);
     return res.status(403).json({ error: "Forbidden" });
   }
-
+  
   next();
 });
 
@@ -74,14 +74,17 @@ const tokensAster = await aster.getAvailableTokens("USDT");
 const tokensHyper = await hyperliquid.getAvailableTokens();
 
 const allTokens = [...new Set([...tokensAster, ...tokensHyper])];
-// const allTokens = ["YZY"]; // para test
-
+//const allTokens = ["XRP"]
 const exchangeMap = { Aster: 4, Lighter: 6, Hyperliquid: 1, Pacifica: 7 };
 
 let cachedOpportunities = [];
 let lastUpdate = null;
 
-const SNAPSHOT_FILE = path.join(__dirname, "data", "opportunities.json");
+const DATA_DIR = path.join(__dirname, "data");
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const SNAPSHOT_FILE = path.join(DATA_DIR, "opportunities.json");
+const FUNDING_FILE = path.join(DATA_DIR, "fundingCache.json");
 
 // ----------------------------------------------------
 // 📦 Cargar cache local (si existe)
@@ -140,7 +143,7 @@ function buildOpportunities(token, ex1, ex2) {
     });
   }
 
-  // --- Estrategia 2: long ex2, short ex1 ---
+    // --- Estrategia 2: long ex2, short ex1 ---
   const apr2 = calcApr(ex2, ex1);
   const spread2 = ex2.ask && ex1.bid ? (ex1.bid - ex2.ask) / ex2.ask : null;
 
@@ -172,13 +175,13 @@ function buildOpportunities(token, ex1, ex2) {
 // ----------------------------------------------------
 // 🔁 Actualización dinámica de datos
 // ----------------------------------------------------
-async function updateCache() {
+async function updateOpportunities() {
   console.log("♻️ Actualizando oportunidades...");
   lastUpdate = new Date().toISOString();
 
   for (const token of allTokens) {
     console.log("🌀 Procesando:", token);
-
+    
     const results = await Promise.allSettled([
       aster.getTokenData(token, "USDT"),
       lighter.getTokenData(token),
@@ -188,7 +191,7 @@ async function updateCache() {
 
     const available = results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
     let newOpps = [];
-
+    
     for (let i = 0; i < available.length; i++) {
       for (let j = i + 1; j < available.length; j++) {
         newOpps.push(...buildOpportunities(token, available[i], available[j]));
@@ -199,50 +202,124 @@ async function updateCache() {
     if (newOpps.length) cachedOpportunities.push(...newOpps);
 
     fs.writeFileSync(SNAPSHOT_FILE, JSON.stringify({ lastUpdate, opportunities: cachedOpportunities }, null, 2));
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(r => setTimeout(r, 1000));
   }
 
-  console.log(`🎯 Ciclo completado. Total: ${cachedOpportunities.length}`);
-  updateCache();
+  setTimeout(updateOpportunities, 60 * 1000);
 }
 
-updateCache();
+// Actualización de fundingCache
+const FUNDING_TIMEFRAMES = {
+  live: "live",
+  "8h": 8,
+  "1d": 24,
+  "7d": 24 * 7,
+  "14d": 24 * 14,
+  "31d": 24 * 31,
+};
 
-// ----------------------------------------------------
-// 🌐 API protegida
-// ----------------------------------------------------
+const BASE_DELAY = 600;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function updateFundingCache() {
+  console.log("🔄 Actualizando fundingCache...");
+  const exchanges = [{ name: "Hyperliquid", instance: hyperliquid }];
+  const cache = {};
+
+  while (true) { // Bucle infinito
+    for (const token of allTokens) {
+      console.log(`🌀 Procesando funding: ${token}`);
+      if (!cache[token]) cache[token] = {};
+
+      for (const ex of exchanges) {
+        cache[token][ex.name] = {};
+
+        for (const [label, hours] of Object.entries(FUNDING_TIMEFRAMES)) {
+          let attempt = 0;
+          let success = false;
+
+          while (!success && attempt < 3) {
+            attempt++;
+            try {
+              const res = await ex.instance.getFundingHistory(token, hours);
+
+              if (!res) {
+                console.warn(`⚠️ ${token} ${label} → sin datos`);
+                success = true;
+                continue;
+              }
+
+              const { avgFundingRate, apr } = res;
+
+              cache[token][ex.name][label] = { 
+                fundingRate: avgFundingRate, 
+                apr: apr * 100
+              };
+
+              success = true;
+              console.log(`✅ ${token} ${label} → APR=${apr.toFixed(2)} FR=${avgFundingRate.toFixed(6)}`);
+            } catch (err) {
+              console.warn(`⚠️ Error ${token} ${label} intento ${attempt}: ${err.message}`);
+              await sleep(BASE_DELAY * 2);
+            }
+          }
+
+          await sleep(BASE_DELAY);
+        }
+
+        cache[token][ex.name].lastUpdate = Date.now();
+      }
+
+      // Guardar cache por cada token
+      try {
+        fs.writeFileSync(FUNDING_FILE, JSON.stringify(cache, null, 2));
+        console.log(`💾 fundingCache.json actualizado con token ${token}`);
+      } catch (err) {
+        console.error("❌ Error guardando fundingCache.json:", err.message);
+      }
+
+      await sleep(BASE_DELAY * 2);
+    }
+
+    console.log("🔁 Todos los tokens procesados, reiniciando...");
+  }
+}
+
+// API
 app.get("/api/opportunity", (req, res) => {
   const { exchanges } = req.query;
   let opportunities = cachedOpportunities;
-
   if (typeof exchanges !== "undefined") {
-    const selected = exchanges
-      ? exchanges.split(",").map((id) => parseInt(id.trim(), 10)).filter((n) => !isNaN(n))
-      : [];
-
-    if (selected.length === 0) {
-      return res.json({ lastUpdate, opportunities: [] });
-    }
-
-    opportunities = opportunities.filter(
-      (opp) => selected.includes(opp.buyExchange) && selected.includes(opp.sellExchange)
-    );
+    const selected = exchanges.split(",").map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+    if (!selected.length) return res.json({ lastUpdate, opportunities: [] });
+    opportunities = opportunities.filter(o => selected.includes(o.buyExchange) && selected.includes(o.sellExchange));
   }
-
   res.json({ lastUpdate, opportunities });
+});
+
+app.get("/api/funding-strategy", (req, res) => {
+  try {
+    if (!fs.existsSync(FUNDING_FILE)) return res.status(503).json({ error: "Funding data not ready yet" });
+    const cache = JSON.parse(fs.readFileSync(FUNDING_FILE, "utf-8"));
+    res.json({ lastUpdate: new Date().toISOString(), funding: cache });
+  } catch (err) {
+    console.error("❌ Error leyendo fundingCache:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // ----------------------------------------------------
 // 🖥️ Servir frontend
 // ----------------------------------------------------
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public/index.html")));
+app.get("/funding-strategy", (req, res) => res.sendFile(path.join(__dirname, "public/funding-strategy.html")));
 
 // ----------------------------------------------------
 // 🚀 Arranque del servidor
 // ----------------------------------------------------
 app.listen(PORT, () => {
   console.log(`✅ Proxy corriendo en http://localhost:${PORT}`);
+  updateOpportunities();
+  updateFundingCache();
 });

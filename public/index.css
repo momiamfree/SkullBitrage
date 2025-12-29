@@ -2,6 +2,7 @@
       --header-gap: 1rem;
     }
     body, body * { color: white !important; }
+  
     input::placeholder { color: white !important; opacity: 1; }
     .logo-circle {
       width: 70px; height: 70px; border: 2px solid white;
@@ -41,11 +42,45 @@
     .controls-row { gap: .5rem; }
 
     .hover-effect:hover {
-      border-color: #0dcaf0 !important;
-      background: rgba(13,202,240,0.1);
-      color: #0dcaf0 !important;
+      border-color: #c6e968 !important;
+      background: rgba(228, 255, 130, 0.1);    /*  40% opaque green */ 
+      color: #c6e968 !important;
     }
+
+    .table tbody tr {
+      height: 50px; /* ajusta según gusto */
+    }
+
+    .table-responsive{
+      box-shadow: 0px 0px 80px rgba(0, 0, 0, 0.5); /* más difusa e intensa */
+    }
+
+    .strategies-menu {
+      border-color: #c6e968 !important;      /* el color que quieras */
+      color: #c6e968 !important;
+
+    }
+ 
     @media (max-width: 768px) {
-      .header-right { flex-wrap: wrap; justify-content:flex-end; }
+      .header-right { width: 80%; justify-content: center; margin-top: 10px;}
       .header-left { gap: .5rem; }
+      .header-row {
+        flex-direction: column !important;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .main-grid, .pagination{
+        margin-left: 10%;
+        margin-right: 10%;
+      }
+      .header{
+        margin-left: 3%;
+        margin-right: 3%;
+      }
+
+      .referidos{
+        margin-top: 2% !important;
+        margin-left: 10%;
+      }
     }

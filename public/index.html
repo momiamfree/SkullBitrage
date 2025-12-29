@@ -42,7 +42,7 @@
       const [filterExchange, setFilterExchange] = React.useState("");
       const [sortConfig, setSortConfig] = React.useState({ key: "apr", direction: "desc" });
       const [page, setPage] = React.useState(1);
-      const pageSize = 20;
+      const pageSize = 15;
 
       const exchMap = React.useMemo(() => {
         const m = {};
@@ -138,7 +138,7 @@
               <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b>
             </span>
           </div>
-          <div className="d-flex header-row mb-3 justify-content-between">
+          <div className="d-flex header-row mb-3 justify-content-between header">
             <div className="header-left">
               <div className="logo-circle me-2">
                 <img src="SKULLKID.png" alt="Logo" />
@@ -151,7 +151,7 @@
             </div>
             <div className="header-right">
               {/* filters on the right as requested */}
-              <div className="d-flex controls-row align-items-center">
+              <div className="d-flex controls-row align-items-center gap-2">
                 <input
                   type="text"
                   className="form-control bg-dark text-light me-2"
@@ -190,9 +190,22 @@
 
               </div>
             </div>
+            
+          </div>
+          <div className="text-center mb-4">
+            <a href="/"
+              className=" gap-1 px-2 py-1 mr-4 border border-secondary rounded-pill text-light text-decoration-none small strategies-menu">Short + Long Strategy <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="Earn profits by taking opposite positions (long and short) on the same token across different exchanges — capturing funding rate differences and price spreads for risk-neutral gains."></i></a>&nbsp;&nbsp;
+            <a href="/funding-strategy"
+              className=" gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none small">Short + Spot Strategy <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="Earn funding fees by shorting perpetuals and holding the same token in spot — a market-neutral strategy."></i></a>
           </div>
           {/* 🔹 Exchanges row con referral & descuento */}
-          <div className="d-flex flex-wrap justify-content-center gap-3 my-3 mt-5">
+          <div className="d-flex flex-wrap  gap-3 my-3 mt-5 referidos">
             {/* Hyperliquid */}
             <a href="https://app.hyperliquid.xyz/join/SKULLBITRAGE"
               target="_blank" rel="noopener noreferrer nofollow sponsored"
@@ -223,8 +236,8 @@
 
           </div>
           {/* Table */}
-          <div className="table-responsive">
-            <table className="table table-dark table-striped mb-0 text-sm text-center align-middle w-100">
+          <div className="table-responsive main-grid rounded-4">
+            <table className="table table-dark table-striped text-center align-middle">
               <thead>
                 <tr>
                   <th>#</th>
@@ -299,7 +312,7 @@
           </div>
 
           {/* Pagination */}
-          <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="d-flex justify-content-between align-items-center mt-3 pagination">
             <button
               className="btn btn-outline-light btn-sm"
               disabled={page === 1}

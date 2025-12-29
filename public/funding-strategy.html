@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SkullBitrage</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="icon" type="image/png" href="SKULLKID.png" />
+  <link rel="stylesheet" type="text/css" href="index.css">
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="/config.js"></script>
+</head>
+<body class="bg-dark text-light">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const BASE_URL = "/api/funding-strategy";
+
+    const EXCHANGES = [
+      { id: 1, name: "Hyperliquid", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/hl_logo.svg" },
+      { id: 4, name: "Aster", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg" },
+      { id: 6, name: "Lighter", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/lt_logo.svg" },
+      { id: 7, name: "Pacifica", logoURL: "https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg" }
+    ];
+
+    function getTradeUrl(exchangeId, token) {
+      switch (exchangeId) {
+        case 7: return `https://app.pacifica.fi/trade/${token}`;
+        case 4: return `https://www.asterdex.com/en/trade/pro/futures/${token}USDT`;
+        case 1: return `https://app.hyperliquid.xyz/trade/${token}`;
+        case 6: return `https://app.lighter.xyz/trade/${token}`;
+        default: return "#";
+      }
+    }
+
+    function formatNumber(n) {
+      if (n == null) return "-";
+      if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2)+"B";
+      if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2)+"M";
+      if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2)+"K";
+      return Number(n).toLocaleString();
+    }
+
+    // Temporalidades mapping
+    const TIMEFRAME_MAP = {
+      "live": "live",
+      8: "8h",
+      24: "1d",
+      168: "7d",
+      336: "14d",
+      744: "31d"
+    };
+
+    function FundingCarryUI() {
+      const [allData, setAllData] = React.useState({}); // Todos los timeframes
+      const [data, setData] = React.useState([]);
+      const [lastUpdate, setLastUpdate] = React.useState("-");
+      const [searchToken, setSearchToken] = React.useState("");
+      const [selectedExchanges, setSelectedExchanges] = React.useState([1]); // Solo Hyperliquid
+      const [timeframeHours, setTimeframeHours] = React.useState("live"); // temporalidad
+      const [sortConfig, setSortConfig] = React.useState({ key: "apr", direction: "desc" });
+      const [page, setPage] = React.useState(1);
+      const pageSize = 15;
+const [openRows, setOpenRows] = React.useState({}); // Estado global de filas abiertas
+      const exchMap = React.useMemo(() => {
+        const m = {};
+        EXCHANGES.forEach(e => m[e.id] = e);
+        
+        return m;
+      }, []);
+
+      // Fetch solo por exchanges cada 10 segundos
+      const fetchData = async () => {
+        try {
+          const resp = await fetch(`${BASE_URL}?exchanges=${selectedExchanges.join(",")}`, {
+            headers: { "Authorization": `Bearer ${window.API_TOKEN || ""}` }
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const json = await resp.json();
+          setAllData(json.funding || {});
+          setLastUpdate(json.lastUpdate ? new Date(json.lastUpdate).toLocaleTimeString() : "-");
+        } catch (err) {
+          console.error("Error fetching data:", err);
+        }
+      };
+
+      React.useEffect(() => { fetchData(); }, [selectedExchanges]);
+      React.useEffect(() => { const i = setInterval(fetchData, 30000); return () => clearInterval(i); }, [selectedExchanges]);
+      
+      // Actualizar data plano según temporalidad
+      React.useEffect(() => {
+        const flatData = [];
+
+        Object.entries(allData).forEach(([token, exs]) => {
+          Object.entries(exs).forEach(([exName, dataEx]) => {
+            const exId = EXCHANGES.find(e => e.name === exName)?.id;
+            if (!exId || !selectedExchanges.includes(exId)) return;
+
+            // Para la temporalidad seleccionada
+            const key = TIMEFRAME_MAP[timeframeHours] || "live";
+            const timeframe = dataEx[key];
+            if (!timeframe) return;
+
+            flatData.push({
+              token,
+              exchange: exId,
+              exchangeName: exName,
+              apr: timeframe.apr,
+              fundingRate: timeframe.fundingRate,
+              lastUpdate: dataEx.lastUpdate
+            });
+          });
+        });
+
+        setData(flatData);
+      }, [allData, timeframeHours, selectedExchanges]);
+
+
+
+      // Filtrado y orden
+      const sortedFilteredData = React.useMemo(() => {
+        let d = [...data];
+        if (searchToken) { d = d.filter(o => o.token.toLowerCase().includes(searchToken.toLowerCase())); setPage(1); }
+        if (selectedExchanges.length) { d = d.filter(o => selectedExchanges.includes(o.exchange)); setPage(1); }
+        if (sortConfig.key) {
+          d.sort((a,b)=>{
+            let valA = a[sortConfig.key], valB = b[sortConfig.key];
+            if(sortConfig.key === "apr") { valA = a.apr; valB = b.apr; }
+            if(sortConfig.key === "token") { valA = a.token.toLowerCase(); valB = b.token.toLowerCase(); }
+            if(sortConfig.key === "dex") { valA = exchMap[a.exchange].name.toLowerCase(); valB = exchMap[b.exchange].name.toLowerCase(); }
+            if(valA < valB) return sortConfig.direction==="asc"?-1:1;
+            if(valA > valB) return sortConfig.direction==="asc"?1:-1;
+            return 0;
+          });
+        }
+        return d;
+      }, [data, searchToken, selectedExchanges, sortConfig]);
+
+      const paginatedData = sortedFilteredData.slice((page-1)*pageSize, page*pageSize);
+      const totalPages = Math.max(1, Math.ceil(sortedFilteredData.length/pageSize));
+
+      const handleSort = key => {
+        setSortConfig(prev => prev.key===key ? { key, direction: prev.direction==="asc"?"desc":"asc" } : { key, direction:"asc" });
+      };
+
+      return (
+        <div className="container-fluid bg-dark text-light min-vh-100 py-5">
+          <div className="text-center mb-4">
+            <span style={{fontSize:"1rem",color:"#fff"}}>
+              Support me to be blessed 🙏🏼:&nbsp;
+              <b>0x1e0d5bf32370A4B207e5a3EeA5cABb96C5C87d3b</b>
+            </span>
+          </div>
+          {/* Header */}
+          <div className="d-flex header-row mb-3 justify-content-between header">
+            <div className="header-left ">
+              <div className="logo-circle me-2"><img src="SKULLKID.png" alt="Logo"/></div>
+              <h1 className="h1 mb-0">
+                SkullBitrage <span style={{fontSize:"0.8rem",color:"#ccc"}}>by <a href="https://twitter.com/momiamfree" target="_blank" rel="noopener noreferrer" style={{color:"#ccc",textDecoration:"none"}}>@momiamfree</a></span>
+              </h1>
+            </div>
+            <div className="header-right">
+              <div className="d-flex controls-row align-items-center gap-2">
+                <input type="text" className="form-control bg-dark text-light" placeholder="Search token..."
+                  value={searchToken} onChange={e=>setSearchToken(e.target.value)} style={{minWidth:"180px"}}/>
+                {/* Temporalidad Dropdown */}
+                <div className="dropdown me-2">
+                  <button className="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    {timeframeHours === "live" ? "Live" : timeframeHours >= 24 ? `${timeframeHours/24}d` : `${timeframeHours}h`}
+                  </button>
+                  <ul className="dropdown-menu bg-dark text-light p-2" style={{minWidth: "120px"}}>
+                    <li><button className={`dropdown-item ${timeframeHours==="live"?"active":""}`} onClick={()=>setTimeframeHours("live")}>Live</button></li>
+                    <li><button className={`dropdown-item ${timeframeHours===8?"active":""}`} onClick={()=>setTimeframeHours(8)}>8h</button></li>
+                    <li><button className={`dropdown-item ${timeframeHours===24?"active":""}`} onClick={()=>setTimeframeHours(24)}>1d</button></li>
+                    <li><button className={`dropdown-item ${timeframeHours===24*7?"active":""}`} onClick={()=>setTimeframeHours(24*7)}>7d</button></li>
+                    <li><button className={`dropdown-item ${timeframeHours===24*14?"active":""}`} onClick={()=>setTimeframeHours(24*14)}>14d</button></li>
+                    <li><button className={`dropdown-item ${timeframeHours===24*31?"active":""}`} onClick={()=>setTimeframeHours(24*31)}>31d</button></li>
+                  </ul>
+                </div>
+                {/* Exchanges Dropdown */}
+                <div className="dropdown">
+                  <button className="btn btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">Exchanges</button>
+                  <ul className="dropdown-menu dropdown-menu-end bg-dark text-light p-2">
+                    {EXCHANGES.map(ex=>(
+                      <li key={ex.id}>
+                        <div className="form-check">
+                          <input type="checkbox" className="form-check-input" id={ex.name}
+                            checked={selectedExchanges.includes(ex.id)}
+                            onChange={e=>{
+                              if(e.target.checked) setSelectedExchanges(prev=>[...prev, ex.id]);
+                              else setSelectedExchanges(prev=>prev.filter(v=>v!==ex.id));
+                            }}
+                          />
+                          <label className="form-check-label" htmlFor={ex.name}>
+                            <img src={ex.logoURL} alt={ex.name} style={{width:"18px",height:"18px"}} className="me-2"/>
+                            {ex.name}
+                          </label>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center mb-4">
+            <a href="/"
+              className=" gap-1 px-2 py-1 mr-4 border border-secondary rounded-pill text-light text-decoration-none small ">Short + Long Strategy <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="Earn profits by taking opposite positions (long and short) on the same token across different exchanges — capturing funding rate differences and price spreads for risk-neutral gains."></i></a>&nbsp;&nbsp;
+            <a href="/funding-strategy"
+              className=" gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none small strategies-menu">Short + Spot Strategy <i className="bi bi-info-circle" 
+                      data-bs-toggle="tooltip" 
+                      data-bs-html="true"
+                      title="Earn funding fees by shorting perpetuals and holding the same token in spot — a market-neutral strategy."></i></a>
+          </div>
+
+          {/* Exchanges referidos */}
+          <div className="d-flex flex-wrap gap-3 my-3 mt-5 referidos">
+            <a href="https://app.hyperliquid.xyz/join/SKULLBITRAGE" target="_blank" rel="noopener noreferrer nofollow sponsored"
+              className="d-flex align-items-center gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none hover-effect small">
+              <img src="https://yieldgapweb-production.up.railway.app/assets/logos/hl_logo.svg" alt="Hyperliquid" style={{width:"16px",height:"16px"}}/>
+              <span className="ms-1 fw-semibold">4% off fees</span>
+            </a>
+            <a href="https://www.asterdex.com/en/referral/F1d31d" target="_blank" rel="noopener noreferrer nofollow sponsored"
+              className="d-flex align-items-center gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none hover-effect small">
+              <img src="https://yieldgapweb-production.up.railway.app/assets/logos/as_logo.svg" alt="Aster" style={{width:"16px",height:"16px"}}/>
+              <span className="ms-1 fw-semibold">6% off fees</span>
+            </a>
+            <a href="https://app.pacifica.fi?referral=skullkid" target="_blank" rel="noopener noreferrer nofollow sponsored"
+              className="d-flex align-items-center gap-1 px-2 py-1 border border-secondary rounded-pill text-light text-decoration-none hover-effect small">
+              <img src="https://yieldgapweb-production.up.railway.app/assets/logos/pf_logo.svg" alt="Pacifica" style={{width:"16px",height:"16px"}}/>
+              <span className="ms-1 fw-semibold">5% point boost</span>
+            </a>
+          </div>
+
+          {/* Tabla */}
+          <div className="table-responsive main-grid rounded-4">
+            <table className="table table-dark table-striped text-center align-middle">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th onClick={()=>handleSort("token")} style={{cursor:"pointer"}}>
+                    Token {sortConfig.key==="token" ? (sortConfig.direction==="asc"?<i className="bi bi-arrow-up-short"></i>:<i className="bi bi-arrow-down-short"></i>):null}
+                  </th>
+                  <th onClick={()=>handleSort("apr")} style={{cursor:"pointer"}}>
+                    APR {sortConfig.key==="apr" ? (sortConfig.direction==="asc"?<i className="bi bi-arrow-up-short"></i>:<i className="bi bi-arrow-down-short"></i>):null}
+                  </th>
+                  <th onClick={()=>handleSort("dex")} style={{cursor:"pointer"}}>
+                    Dex (Short){sortConfig.key==="dex" ? (sortConfig.direction==="asc"?<i className="bi bi-arrow-up-short"></i>:<i className="bi bi-arrow-down-short"></i>):null}
+                  </th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.map((o,i)=>{
+                  const ex = exchMap[o.exchange];
+                  const url = getTradeUrl(o.exchange, o.token);
+                  const rowKey = o.token;
+                  const open = !!openRows[rowKey];
+
+                  const toggleRow = () => {
+                    setOpenRows(prev => ({ ...prev, [rowKey]: !prev[rowKey] }));
+                  };
+
+                  return (
+                    <React.Fragment key={i}>
+                      <tr onClick={toggleRow} style={{cursor:"pointer"}}>
+                        <td>#{(page-1)*pageSize+i+1}</td>
+                        <td className="fw-semibold">
+                        <a href={url} target="_blank" rel="noopener noreferrer" style={{color:"inherit", textDecoration:"none"}}>
+                          {o.token}&nbsp;
+                          <i className="bi bi-box-arrow-up-right" style={{fontSize: "0.7rem"}}></i>
+                        </a>
+
+                        </td>
+                        <td className={o.apr >= 0 ? "text-success fw-bold" : "text-danger fw-bold"}>
+                          {o.apr.toFixed(1)} %
+                        </td>
+                        <td>
+                          
+                            <div className="d-flex align-items-center justify-content-center gap-2">
+                              <img src={ex.logoURL} alt={ex.name} style={{width:"18px",height:"18px"}}/>
+                              <a href={url} target="_blank" rel="noopener noreferrer" style={{color:"inherit", textDecoration:"none"}}><span>{ex.name}</span></a>
+                            </div>
+                          
+                        </td>
+                        <td>
+                          <i className={`bi ${open ? "bi-chevron-up" : "bi-chevron-down"}`}></i>
+                        </td>
+                      </tr>
+
+                      {open && (
+                        <tr className="bg-secondary text-light">
+                          <td colSpan={5}>
+                            <div className="d-flex justify-content-around flex-wrap gap-3 p-2">
+                              {allData[o.token]?.[o.exchangeName] &&
+                                Object.entries(allData[o.token][o.exchangeName])
+                                  .filter(([tf]) => tf !== "lastUpdate")
+                                  .map(([tf, val]) => (
+                                    <div key={tf} className="d-inline-flex align-items-center">
+                                    <span className="badge bg-secondary rounded-end-0">{tf}</span>
+                                    <span className={val.apr >= 0 
+                                        ? "badge bg-success fw-bold rounded-start-0" 
+                                        : "badge bg-danger fw-bold rounded-start-0"}>
+                                      {val.apr.toFixed(1)} %
+                                    </span>
+                                    </div>
+                                  ))
+                              }
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+
+
+
+          {/* Pagination */}
+          <div className="d-flex justify-content-between align-items-center mt-3 pagination">
+            <button className="btn btn-outline-light btn-sm" disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))}>
+              <i className="bi bi-arrow-left"></i> Previous
+            </button>
+            <span>Page {page} of {totalPages}</span>
+            <button className="btn btn-outline-light btn-sm" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>
+              Next <i className="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<FundingCarryUI />);
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
