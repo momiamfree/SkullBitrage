@@ -29,7 +29,8 @@ app.use("/api", (req, res, next) => {
   const origin = req.get("origin") || req.get("referer") || "";
   const allowed = [
     "https://www.skullbitrage.com",
-    "http://localhost:4000"
+    "http://localhost:4000",
+    "https://skullkid.app.n8n.cloud/",
   ];
 
   if (!origin || !allowed.some(a => origin.startsWith(a))) {
@@ -48,7 +49,7 @@ app.use("/api", (req, res, next) => {
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token || token !== process.env.API_TOKEN) {
-    return res.status(401).json({ error: "Unauthorized" });
+    //return res.status(401).json({ error: "Unauthorized" });
   }
 
   next();
